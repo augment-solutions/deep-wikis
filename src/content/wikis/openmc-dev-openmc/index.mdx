@@ -1,8 +1,17 @@
 ---
-
+title: "OpenMC Monte Carlo Particle Transport Code"
+description: "OpenMC is an open-source Monte Carlo particle transport code designed for simulating nuclear systems such as fission reactors, fusion devices, and radiation shielding problems. It was originally developed at MIT's Computational Reactor Physics Group and is now maintained by a broad community of contributors worldwide. The code performs continuous-energy and multigroup neutron and photon transport using the Monte Carlo method, where particles are tracked stochastically through complex geometries. OpenMC supports constructive solid geometry (CSG) using surfaces, regions, cells, universes, and lattices, as well as CAD-based geometry via DAGMC integration. The codebase is a hybrid C++17/Python architecture: the computationally intensive transport kernel lives in C++, while the Python layer provides a rich API for building models, processing output, and controlling simulations. A C API (capi.h) bridges the two layers, exposed to Python via ctypes bindings in the openmc.lib package. OpenMC supports both k-eigenvalue criticality calculations and fixed-source simulations, and also implements a deterministic random ray solver as an alternative to Monte Carlo transport. The depletion module (openmc.deplete) couples neutron transport to isotopic burnup equations, enabling fuel cycle analysis using various operator-splitting integrators. The tally system is highly flexible, supporting dozens of filter types (spatial, energy, reaction, etc.) and score types for extracting reaction rates and other physical quantities. Nuclear data is stored in HDF5 format and accessed through the openmc.data module, which also handles ENDF file parsing, ACE format processing, and windowed multipole resonance treatment. Simulation output is written to HDF5 statepoint files, which can be read back through openmc.StatePoint for post-processing tally results and restarting runs. OpenMC leverages OpenMP for shared-memory parallelism and MPI for distributed-memory parallel simulation. The Python model API is organized around a Model class that bundles Geometry, Materials, Settings, Tallies, and Plots, and can export to XML for the C++ engine to consume. OpenMC is widely used in academia and national laboratories for reactor physics research, nuclear data validation, and shielding analysis."
+repo_url: "https://github.com/openmc-dev/openmc"
+last_updated: "2026-05-06 10:07:35 -0500"
+commit_hash: "e542b2f035e397a647cc3ad0ae39946b1ad81e7b"
+commit_hash_short: "e542b2f"
+stars: 1015
+language: "Python"
+topics: ["computational-physics", "high-performance-computing", "monte-carlo-simulation", "neutron-transport", "neutronics", "nuclear-data", "nuclear-energy", "nuclear-engineering", "nuclear-fusion", "openmc", "particle-transport", "photon-transport", "radiation-transport"]
+---
 # OpenMC Monte Carlo Particle Transport Code
 
-Last updated on Apr 28, 2026 (Commit: [368ea06](https://github.com/openmc-dev/openmc/commit/368ea069ca6ab1bdc6145855223d5c6b4dc6aa47))
+Last updated on May 06, 2026 (Commit: [e542b2f](https://github.com/openmc-dev/openmc/commit/e542b2f035e397a647cc3ad0ae39946b1ad81e7b))
 
 ## Overview & Key Concepts
 
@@ -13,102 +22,102 @@ Last updated on Apr 28, 2026 (Commit: [368ea06](https://github.com/openmc-dev/op
 <li><code>README.md</code></li>
 <li><code>openmc/__init__.py</code></li>
 <li><code>openmc/model/model.py</code></li>
-<li><code>openmc/examples.py</code></li>
 <li><code>openmc/settings.py</code></li>
+<li><code>openmc/executor.py</code></li>
 <li><code>src/main.cpp</code></li>
-<li><code>include/openmc/constants.h</code></li>
+<li><code>src/simulation.cpp</code></li>
+<li><code>include/openmc/simulation.h</code></li>
 </ul>
 
 </details>
 
-OpenMC is an open-source **Monte Carlo particle transport code** used to simulate the behavior of neutrons and photons in nuclear systems such as reactors, fusion devices, and shielding assemblies. It was originally developed at MIT's Computational Reactor Physics Group and is now a community-driven project hosted on GitHub.
+OpenMC is an open-source Monte Carlo particle transport code for simulating nuclear systems — reactors, fusion devices, shielding problems, and any geometry where neutrons or photons travel through matter. It originated at MIT's Computational Reactor Physics Group and is now maintained by a broad open-source community under the MIT license.
 
-The codebase is a **hybrid C++/Python system**: the Python layer (`openmc/`) provides a rich API for building models, configuring simulations, and post-processing results, while the C++ core (`src/`, `include/openmc/`) handles the computationally intensive transport calculations.
+The codebase is a hybrid of C++17 and Python: computationally intensive particle transport runs in a compiled C++ library, while problem setup, post-processing, and high-level orchestration are handled through a Python API. This split lets users define complex models interactively (or programmatically) and then hand off the heavy computation to optimized, parallelized C++ code.
 
-### Architecture at a Glance
+### System Architecture
 
 ```mermaid
 flowchart TD
-    user["User (Python)"]
-    model["openmc.Model\n(geometry, materials,\nsettings, tallies)"]
-    xml["XML Input Files"]
-    cpp_core["C++ Transport Engine\n(src/main.cpp)"]
-    hdf5_out["HDF5 Output\n(statepoints, tracks)"]
-    post["Post-Processing\n(openmc.StatePoint)"]
+    user["Python User Code"]
+    model["openmc.Model\n(model/model.py)"]
+    xml["XML Input Files\n(geometry, materials, settings)"]
+    executor["openmc.executor\n(executor.py)"]
+    binary["C++ Binary\n(src/main.cpp)"]
+    sim["Simulation Loop\n(src/simulation.cpp)"]
+    hdf5["HDF5 Output\n(statepoint, summary)"]
+    post["Python Post-processing\n(StatePoint, Tallies)"]
 
     user --> model
     model --> xml
-    xml --> cpp_core
-    cpp_core --> hdf5_out
-    hdf5_out --> post
-    post --> user
+    model --> executor
+    executor --> binary
+    binary --> sim
+    sim --> hdf5
+    hdf5 --> post
 ```
 
-The Python API serializes model definitions to XML; the C++ engine reads those files, runs the simulation (Monte Carlo or random-ray), and writes results to HDF5 statepoint files. Python then reads those results back for analysis.
+The architecture follows a clean separation of concerns across four layers:
 
-### Key Concepts
+1. **Python Model Building** — Users compose geometry, materials, tallies, and settings using Python objects.
+2. **XML Serialization** — `Model.export_to_xml()` writes the model to XML files that the C++ binary reads.
+3. **C++ Transport Engine** — The compiled `openmc` binary parses inputs, runs the particle transport loop, and writes HDF5 results.
+4. **Python Post-processing** — `openmc.StatePoint` and related classes read simulation output back into Python for analysis.
 
-**Geometry** — OpenMC uses Constructive Solid Geometry (CSG): surfaces (planes, spheres, cylinders, etc.) are combined via Boolean operations to define cells, which are grouped into universes and optionally arranged in lattices. An optional CAD-based geometry backend (DAGMC) is available when compiled with `-DOPENMC_USE_DAGMC=ON`.
+### The `Model` Class — Central Orchestrator
 
-**Materials** — Each cell is filled with a `Material` that specifies nuclide compositions and densities. Nuclear cross-section data is loaded from HDF5 libraries indexed by `cross_sections.xml`.
-
-**Settings** — The `openmc.Settings` class controls every aspect of the simulation:
-- **Run mode**: `EIGENVALUE` (criticality, k-eff), `FIXED_SOURCE`, `PLOT`, `VOLUME`, or `PARTICLE_RESTART`
-- **Solver**: Monte Carlo (default) or Random Ray (alternative deterministic method)
-- **Particle counts**, batch numbers, energy cutoffs, and statistical options
-
-**Tallies** — Quantities of interest (flux, reaction rates, etc.) are accumulated by attaching `Filter` objects (by energy, cell, material, etc.) to `Tally` objects.
-
-### The `Model` Class
-
-`openmc.Model` is the central container class that holds all simulation components. It is the recommended starting point for building any simulation:
+`openmc.Model` (`openmc/model/model.py`) is the top-level container that bundles every piece of a simulation:
 
 ```python
 import openmc
 
 model = openmc.Model()
-model.geometry  = openmc.Geometry([...])
-model.materials = openmc.Materials([...])
-model.settings  = openmc.Settings()
-model.tallies   = openmc.Tallies([...])
+model.geometry   = openmc.Geometry(...)    # CSG cell/surface tree
+model.materials  = openmc.Materials(...)   # Nuclide compositions
+model.settings   = openmc.Settings(...)    # Run parameters
+model.tallies    = openmc.Tallies(...)     # Scoring definitions
 
-model.run()  # Exports XML and launches the C++ engine
+model.run()                                # Export XML and launch simulation
 ```
 
-### Pre-Built Examples
+`Model.run()` calls `export_to_xml()` and then delegates to `openmc.executor.run()`, which spawns the C++ binary as a subprocess.
 
-The `openmc.examples` module provides ready-to-run benchmark models useful for testing and learning:
+### Run Modes
 
-```python
-import openmc.examples
+The `RunMode` enum in `openmc/settings.py` selects what the simulation computes:
 
-model = openmc.examples.pwr_pin_cell()   # PWR pin-cell (BEAVRS benchmark)
-model = openmc.examples.pwr_assembly()   # PWR fuel assembly
-model = openmc.examples.pwr_core()       # Full PWR core (OECD/NEA benchmark)
-model = openmc.examples.slab_mg()        # Multi-group infinite slab
+| Mode | Purpose |
+|------|---------|
+| `EIGENVALUE` | Compute multiplication factor k-effective for a critical system |
+| `FIXED_SOURCE` | Simulate a prescribed neutron/photon source |
+| `PLOT` | Render geometry visualizations |
+| `VOLUME` | Stochastic volume calculation for each cell |
+| `PARTICLE_RESTART` | Replay a single particle history for debugging |
+
+### C++ Simulation Loop
+
+`src/main.cpp` is the binary entry point. After parsing arguments and loading XML, it routes execution based on run mode. For eigenvalue and fixed-source problems, control passes to `openmc_run()` in `src/simulation.cpp`, which runs the core batch loop:
+
+```
+openmc_simulation_init()
+  └─ while batches remain:
+       openmc_next_batch()
+         ├─ initialize_batch / initialize_generation
+         ├─ transport_history_based()  or  transport_event_based()
+         └─ finalize_batch() → accumulate tallies, update k-eff
+openmc_simulation_finalize()
+  └─ write statepoint HDF5
 ```
 
-### C++ Execution Flow
+Global simulation state (current batch, k-effective, lost-particle count, etc.) lives in the `openmc::simulation` namespace declared in `include/openmc/simulation.h` and is shared across the C++ subsystem.
 
-The C++ entry point (`src/main.cpp`) dispatches to the appropriate solver based on the run mode:
+### Key Concepts for New Contributors
 
-1. **`openmc_init()`** — Parses XML, loads nuclear data, sets up geometry
-2. **Dispatch** — Routes to `openmc_run()`, `openmc_run_random_ray()`, `openmc_plot_geometry()`, `openmc_calculate_volumes()`, or `run_particle_restart()`
-3. **`openmc_finalize()`** — Flushes output files and cleans up memory
-
-MPI is supported throughout; all MPI-specific code is guarded with `#ifdef OPENMC_MPI`.
-
-### Global Constants
-
-`include/openmc/constants.h` defines versioning and numerical tuning values shared across all C++ code:
-
-- **File format versions**: `VERSION_STATEPOINT`, `VERSION_PARTICLE_RESTART`, `VERSION_WEIGHT_WINDOWS` — these ensure statepoint files remain readable across releases.
-- **Geometry precision**: `FP_PRECISION = 1e-14` (floating-point tolerance), `FP_COINCIDENT = 1e-12` (surface coincidence detection)
-- **Physical constants**: Neutron/electron masses, Planck's constant (CODATA 2018 values)
-
-### Container Types
-
-The C++ codebase defines its own container aliases in the `openmc::` namespace (`openmc::vector`, `openmc::array`, `openmc::unique_ptr`). These are currently typedefs to their `std::` equivalents but exist to support future accelerator (GPU) portability. **Always use `openmc::vector` rather than `std::vector` in new C++ code.**
+- **Geometry backends**: OpenMC supports Constructive Solid Geometry (CSG) by default. Optional builds add DAGMC (CAD-based geometry via `#ifdef OPENMC_DAGMC`) and unstructured mesh via libMesh.
+- **Parallelism**: History-based parallelism (the default) assigns complete particle histories to threads/ranks. Event-based parallelism (`transport_event_based`) is an alternative that distributes individual collision events.
+- **Custom containers**: Use `openmc::vector`, `openmc::array`, and `openmc::make_unique` (defined in `vector.h`, `array.h`, `memory.h`) rather than their `std::` equivalents, to remain compatible with future accelerator-targeted implementations.
+- **ID management**: Python geometry objects auto-assign integer IDs via `IDManagerMixin`. Call `openmc.reset_auto_ids()` between independent model constructions (e.g., in test fixtures) to avoid ID collisions.
+- **Nuclear data**: Cross-section data is stored in HDF5 format. The `OPENMC_CROSS_SECTIONS` environment variable must point to a valid `cross_sections.xml` index file for any simulation to run.
 
 ## Architecture & Data Flow
 
@@ -118,699 +127,685 @@ The C++ codebase defines its own container aliases in the `openmc::` namespace (
 <ul>
 <li><code>src/main.cpp</code></li>
 <li><code>src/initialize.cpp</code></li>
-<li><code>src/simulation.cpp</code></li>
 <li><code>src/finalize.cpp</code></li>
 <li><code>include/openmc/capi.h</code></li>
-<li><code>include/openmc/simulation.h</code></li>
-<li><code>include/openmc/settings.h</code></li>
-<li><code>openmc/lib/core.py</code></li>
 <li><code>openmc/lib/__init__.py</code></li>
-<li><code>openmc/executor.py</code></li>
+<li><code>openmc/lib/core.py</code></li>
+<li><code>CMakeLists.txt</code></li>
+<li><code>openmc/model/model.py</code></li>
 </ul>
 
 </details>
 
-OpenMC has a layered architecture: a high-performance **C++ core** that handles particle transport, wrapped by a **C API** (`capi.h`), which is then exposed to Python through two complementary interfaces—a `subprocess`-based executor and an in-process `ctypes` library.
+OpenMC is structured as a hybrid C++/Python system. The computationally intensive particle transport engine is written in C++17 and compiled into a shared library (`libopenmc.so`). A Python package wraps this library via `ctypes`, providing both a high-level model-building API and fine-grained runtime control through `openmc.lib`.
+
+### High-Level Architecture
 
 ```mermaid
 flowchart TD
-    user["Python User Code"]
-    executor["openmc.executor (subprocess)"]
-    lib["openmc.lib (ctypes / in-process)"]
-    capi["C API — openmc_init / openmc_run / openmc_finalize"]
-    init["openmc_init — parse args, read XML, load XS"]
-    run["openmc_run — batch loop"]
-    fin["openmc_finalize — write output, free memory"]
-    hdf5[("HDF5 statepoint output")]
+    user["User (Python script)"]
+    model["openmc.Model"]
+    xml["XML Input Files"]
+    lib["openmc.lib (ctypes bindings)"]
+    capi["C API (capi.h)"]
+    cpp["C++ Transport Engine"]
+    hdf5["HDF5 Output (statepoint, summary)"]
 
-    user --> executor
-    user --> lib
-    executor -->|subprocess| capi
-    lib -->|ctypes| capi
-    capi --> init
-    capi --> run
-    capi --> fin
-    run --> hdf5
+    user --> model
+    model -->|"export_to_xml()"| xml
+    model -->|"init_lib() / run()"| lib
+    xml -->|"openmc_init reads"| cpp
+    lib -->|"ctypes calls"| capi
+    capi --> cpp
+    cpp -->|"writes"| hdf5
+    hdf5 -->|"openmc.StatePoint"| user
 ```
 
 ### Entry Points
 
-There are two ways to invoke OpenMC from Python:
+There are two ways to drive an OpenMC simulation:
 
-- **`openmc.run()`** (in `openmc/executor.py`): Launches the `openmc` binary as a child process via `subprocess.Popen`. Arguments are assembled by `_process_CLI_arguments()` and the process's stdout is streamed back in real time. This is the simplest usage and isolates OpenMC's memory entirely.
-- **`openmc.lib`** (in `openmc/lib/core.py`): Loads `libopenmc.so` via `ctypes` and calls the C API functions directly in the same process. This enables advanced workflows such as modifying materials or tallies between batches without re-launching.
+1. **Standalone executable** — `src/main.cpp` is the traditional entry point. It calls `openmc_init`, dispatches to `openmc_run` (or `openmc_run_random_ray`, `openmc_plot_geometry`, etc.) based on `settings::run_mode`, then calls `openmc_finalize`.
 
-```python
-# Subprocess approach — simple one-shot run
-openmc.run(particles=10000, threads=4)
+2. **Python in-process API** — `openmc.lib` loads `libopenmc.so` via `ctypes` (in `openmc/lib/__init__.py`) and exposes the same C functions as Python callables. This allows users to embed OpenMC in Python workflows, inspect state between batches, or perform coupled multi-physics simulations.
 
-# In-process approach — inspect state between batches
-with openmc.lib.run_in_memory():
-    openmc.lib.simulation_init()
-    for _ in openmc.lib.iter_batches():
-        k, std = openmc.lib.keff()
-    openmc.lib.simulation_finalize()
-```
+### Initialization Sequence
 
-### C API Lifecycle (`capi.h`)
+`openmc_init` (in `src/initialize.cpp`) runs the following steps in order:
 
-Every run goes through three top-level C functions, each exposed to Python via ctypes signatures in `openmc/lib/core.py`:
-
-1. **`openmc_init`** — Parses command-line arguments, optionally sets up MPI, reads all XML input files (or a single `model.xml`), loads cross-section data, builds geometry, and allocates tally arrays.
-2. **`openmc_run`** — Drives the main batch loop until the stopping criterion is reached. Internally calls `openmc_simulation_init`, then iterates `openmc_next_batch`, then `openmc_simulation_finalize`.
-3. **`openmc_finalize`** — Resets all global state, resets timers, deallocates memory, frees MPI datatypes, and finalizes optional libraries (libMesh, random ray).
-
-### Initialization Data Flow
-
-`openmc_init` (implemented in `src/initialize.cpp`) performs these steps in order:
-
-1. Initialize MPI and determine rank / number of processes.
-2. Parse command-line flags to set `settings::run_mode` and other `settings::` namespace variables.
-3. Read **`model.xml`** (single-file format) or fall back to separate `settings.xml`, `materials.xml`, `geometry.xml`, `tallies.xml`.
-4. Call `finalize_geometry()` to resolve universe hierarchy and assign temperatures.
-5. Call `finalize_cross_sections()` to load temperature-interpolated ACE data.
-6. Prepare tally filters and variance-reduction structures.
-
-### Simulation Batch Loop
-
-The main transport loop in `src/simulation.cpp` executes a nested structure:
-
-```
-openmc_run
-└── openmc_simulation_init   ← allocate banks, initialize source
-    └── while status == 0:
-        openmc_next_batch
-        ├── initialize_batch  ← increment counter, activate tallies
-        └── for gen in gen_per_batch:
-            ├── initialize_generation  ← clear fission bank
-            ├── transport_history_based()  OR  transport_event_based()
-            └── finalize_generation  ← sync bank across MPI, calc keff
-        └── finalize_batch  ← accumulate tallies, write statepoints
-```
-
-Each **particle history** is initialized by `initialize_history()`, which seeds its pseudo-random number generator deterministically from `(generation * n_particles + particle_id)`, ensuring reproducibility.
-
-### History-Based vs. Event-Based Transport
-
-OpenMC supports two parallelism modes, selected by `settings::event_based`:
-
-- **History-based** (default): Each OpenMP thread takes one particle and drives it from birth to death through `transport_history_based_single_particle()`. The event sequence is `event_calculate_xs → event_advance → event_cross_surface / event_collide → event_revive_from_secondary → event_death`.
-- **Event-based** (`-e` flag): All in-flight particles are stored in queues. The transport loop picks the longest queue each iteration and dispatches the matching kernel (`process_calculate_xs_events`, `process_advance_particle_events`, `process_surface_crossing_events`, `process_collision_events`). This improves cache locality for large particle counts but has higher bookkeeping overhead.
+1. **MPI setup** — If compiled with `OPENMC_MPI`, sets up the MPI communicator and creates custom MPI datatypes for `SourceSite` and `CollisionTrackSite`.
+2. **Command-line parsing** — Reads flags like `-n` (particles), `-e` (event-based mode), `-r` (restart file).
+3. **Optional library init** — Initializes libMesh if `OPENMC_USE_LIBMESH` is enabled.
+4. **XML input reading** — Calls `read_model_xml()` or falls back to `read_separate_xml_files()` to read geometry, materials, settings, tallies, and plots.
+5. **Properties import** — Optionally imports physical properties (temperatures, densities) from an HDF5 properties file.
 
 ### Run Modes
 
-`settings::run_mode` selects the physics calculation:
+Once initialized, `main.cpp` dispatches based on `settings::run_mode`:
 
-| Mode | Flag | Description |
-|---|---|---|
-| `EIGENVALUE` | (default) | k-eigenvalue criticality search with inactive + active batches |
-| `FIXED_SOURCE` | — | External source driven; no fission bank synchronization |
-| `PLOTTING` | `-p` | Geometry visualization only |
-| `VOLUME` | `-c` | Stochastic volume calculations |
-| `PARTICLE` | `-r <restart>` | Replay a single particle history for debugging |
+| Mode | Function called | Purpose |
+|------|----------------|---------|
+| `FIXED_SOURCE` / `EIGENVALUE` (Monte Carlo) | `openmc_run()` | History- or event-based transport |
+| `FIXED_SOURCE` / `EIGENVALUE` (Random Ray) | `openmc_run_random_ray()` | Deterministic-like random ray solver |
+| `PLOTTING` | `openmc_plot_geometry()` | Geometry visualization |
+| `PARTICLE` | `run_particle_restart()` | Replay a single particle history |
+| `VOLUME` | `openmc_calculate_volumes()` | Stochastic volume calculation |
 
-### MPI Data Flow
+### C API Layer (`capi.h`)
 
-Under MPI, each rank transports its own slice of the source bank (`work_per_rank` particles). After each generation in eigenvalue mode, `synchronize_bank()` redistributes fission sites evenly across ranks. After all active batches complete, `broadcast_results()` sends tally arrays from rank 0 to all other ranks so every process has the full results before `openmc_finalize` writes the HDF5 statepoint.
+`include/openmc/capi.h` declares all symbols exposed as a stable C API using `extern "C"` linkage. These functions cover:
+- Lifecycle: `openmc_init`, `openmc_run`, `openmc_finalize`, `openmc_reset`, `openmc_hard_reset`
+- Geometry queries: `openmc_find_cell`, `openmc_cell_get_temperature`, `openmc_cell_set_temperature`
+- Tally access: `openmc_global_tallies`, `openmc_get_keff`
+- Simulation control: `openmc_simulation_init`, `openmc_next_batch`, `openmc_simulation_finalize`
 
-## Geometry & Material Modeling
+Return values are `int` error codes. A non-zero return typically means an error message was written to `openmc_err_msg`.
+
+### Python Bindings (`openmc.lib`)
+
+`openmc/lib/__init__.py` loads `libopenmc.so` into a module-level `_dll` (a `ctypes.CDLL` object). Each submodule (`core.py`, `cell.py`, `material.py`, etc.) then configures argument types and return types on `_dll` symbols and wraps them in Python functions.
+
+```python
+# Pattern used throughout openmc/lib/core.py
+_dll.openmc_run.restype = c_int
+_dll.openmc_run.errcheck = _error_handler
+
+def run(output=True):
+    with quiet_dll(output):
+        _dll.openmc_run()
+```
+
+The `iter_batches()` generator is especially useful for coupled simulations: it calls `openmc_next_batch()` in a loop, yielding control back to Python between each batch so tally data can be inspected or boundary conditions updated.
+
+### Python Model API (`openmc.Model`)
+
+`openmc/model/model.py` defines the `Model` class, which groups `Geometry`, `Materials`, `Settings`, `Tallies`, and `Plots` into a single object. The two primary workflows are:
+
+- **File-based**: `model.export_to_xml()` writes XML input files, then the `openmc` executable (or `openmc.run()`) reads them.
+- **In-process**: `model.init_lib()` exports XML internally, calls `openmc.lib.init()`, and keeps the C++ state loaded in memory. `model.finalize_lib()` calls `openmc.lib.finalize()` to free memory.
+
+### Finalization and Memory
+
+`openmc_finalize` (in `src/finalize.cpp`) calls `openmc_simulation_finalize` if a simulation was started, then `openmc_reset` to clear tally results, `reset_timers`, and finally `free_memory()`. The `free_memory()` function sequentially calls per-subsystem cleanup routines for geometry, surfaces, materials, tallies, mesh, weight windows, CMFD, and event queues, ensuring all global `vector&lt;unique_ptr&lt;T&gt;&gt;` containers are cleared.
+
+### Build System
+
+`CMakeLists.txt` uses CMake 3.16+ to configure both the standalone executable and the shared library. Key compile-time options include:
+
+- `OPENMC_USE_OPENMP` (default ON) — shared-memory parallelism
+- `OPENMC_USE_MPI` (default OFF) — distributed-memory parallelism
+- `OPENMC_USE_DAGMC` (default OFF) — CAD geometry via DAGMC
+- `OPENMC_USE_LIBMESH` (default OFF) — unstructured mesh tallies
+- `OPENMC_ENABLE_STRICT_FP` (default OFF) — reproducible floating-point for testing
+
+## Geometry System (CSG & DAGMC)
 
 <details>
 <summary>Relevant Files</summary>
 
 <ul>
+<li><code>openmc/geometry.py</code></li>
 <li><code>openmc/surface.py</code></li>
-<li><code>openmc/region.py</code></li>
 <li><code>openmc/cell.py</code></li>
 <li><code>openmc/universe.py</code></li>
 <li><code>openmc/lattice.py</code></li>
-<li><code>openmc/geometry.py</code></li>
-<li><code>openmc/material.py</code></li>
-<li><code>openmc/model/surface_composite.py</code></li>
-<li><code>openmc/model/triso.py</code></li>
+<li><code>openmc/region.py</code></li>
 <li><code>openmc/dagmc.py</code></li>
-<li><code>include/openmc/surface.h</code></li>
-<li><code>include/openmc/cell.h</code></li>
-<li><code>include/openmc/lattice.h</code></li>
 <li><code>src/geometry.cpp</code></li>
+<li><code>src/surface.cpp</code></li>
 <li><code>src/cell.cpp</code></li>
+<li><code>src/universe.cpp</code></li>
+<li><code>src/lattice.cpp</code></li>
+<li><code>src/dagmc.cpp</code></li>
+<li><code>include/openmc/geometry.h</code></li>
 </ul>
 
 </details>
 
-OpenMC uses **Constructive Solid Geometry (CSG)** to define geometry: surfaces divide space into half-spaces, Boolean region algebra combines them into cells, cells are grouped into universes, and universes can be repeated via lattices. Materials are assigned independently and attached to cells at model-build time.
+OpenMC supports two geometry backends that share the same particle-tracking interface: **CSG** (Constructive Solid Geometry) and **DAGMC** (Direct Accelerated Geometry Monte Carlo for CAD models). Both are represented as `Universe` subclasses, allowing them to be freely mixed within a single model.
+
+### Object Hierarchy
+
+The geometry is built from five primary abstractions layered into a tree:
 
 ```mermaid
 flowchart TD
-    mat["Material\n(nuclides + density)"]
-    surf["Surface\n(Sphere, Cylinder, Plane…)"]
-    hs["Halfspace\n(+/- operator)"]
-    reg["Region\n(Intersection / Union / Complement)"]
-    cell["Cell\n(region + fill)"]
-    univ["Universe\n(collection of cells)"]
-    lat["Lattice\n(RectLattice / HexLattice)"]
-    geom["Geometry\n(root universe)"]
-
-    surf -->|"unary +/-"| hs
-    hs -->|"& | ~"| reg
-    reg --> cell
-    mat --> cell
-    cell --> univ
-    univ --> lat
-    lat --> cell
-    univ --> geom
+    G["Geometry (root container)"] --> RU["root_universe (UniverseBase)"]
+    RU --> C1["Cell (CSG)"]
+    RU --> DU["DAGMCUniverse (CAD)"]
+    RU --> L["Lattice (RectLattice / HexLattice)"]
+    C1 --> R["Region (Halfspace / Intersection / Union)"]
+    R --> S["Surface (Plane, Sphere, Cylinder, ...)"]
+    C1 -->|"fill"| M["Material / Universe / Lattice"]
+    L -->|"tile universes"| U2["Universe[]"]
+    U2 --> C2["Cell[]"]
 ```
 
-### Materials
+- **`Geometry`** — top-level container; owns `root_universe` and manages XML I/O and surface deduplication.
+- **`Surface`** — an implicit quadratic equation (e.g., sphere, plane, cylinder). Applying `+` or `-` yields a `Halfspace` region.
+- **`Region`** — boolean combination of half-spaces using `&` (Intersection), `|` (Union), and `~` (Complement).
+- **`Cell`** — a bounded volume defined by a `Region` and filled with a `Material`, a `Universe`, a `Lattice`, or void.
+- **`Universe`** — a named collection of cells; can be nested inside other cells to build complex hierarchies.
+- **`Lattice`** — a regularly spaced array (`RectLattice` or `HexLattice`) where every tile is a `Universe`.
 
-`openmc.Material` holds the isotopic composition and bulk density of a region. Nuclides or natural elements are added with `add_nuclide` / `add_element`, then a density is assigned.
+### Building CSG Geometry in Python
+
+Surfaces are combined with Python operators to define cell regions:
 
 ```python
 import openmc
 
-fuel = openmc.Material(name='UO2 fuel')
-fuel.add_element('U', 1.0, percent_type='ao', enrichment=3.5)
-fuel.add_element('O', 2.0)
-fuel.set_density('g/cm3', 10.97)
+# Define surfaces
+inner = openmc.Sphere(r=0.5)
+outer = openmc.Sphere(r=1.0, boundary_type='vacuum')
 
-water = openmc.Material(name='Water')
-water.add_nuclide('H1',  2.0)
-water.add_nuclide('O16', 1.0)
-water.set_density('g/cm3', 0.74)
-water.add_s_alpha_beta('c_H_in_H2O')   # thermal scattering
+# Boolean region algebra
+fuel_region = -inner           # inside the sphere
+water_region = +inner & -outer # between the two spheres
+
+# Cells
+fuel_cell  = openmc.Cell(fill=fuel_material,  region=fuel_region)
+water_cell = openmc.Cell(fill=water_material, region=water_region)
+
+# Universe and geometry
+universe = openmc.Universe(cells=[fuel_cell, water_cell])
+geometry = openmc.Geometry(root=universe)
+geometry.export_to_xml()
 ```
 
-Supported density units include `'g/cm3'`, `'atom/b-cm'`, `'atom/cm3'`, and `'sum'` (sum of component partial densities). The `depletable=True` flag marks a material for burnup tracking in depletion calculations.
+Surface boundary conditions (`vacuum`, `reflective`, `periodic`, `white`) are set via `boundary_type` on the surface object. The `albedo` property scales particle weight on reflection.
 
-### Surfaces
+### Region Boolean Algebra
 
-All surfaces inherit from `openmc.Surface` and implement a quadric equation f(x,y,z). The unary `-` and `+` operators produce `Halfspace` objects (the two sides of the surface).
+`Region` objects form an abstract syntax tree evaluated during particle tracking:
 
-| Surface class | Key parameters |
-|---|---|
-| `Plane` / `XPlane` / `YPlane` / `ZPlane` | `a, b, c, d` or axis intercept |
-| `Sphere` | `x0, y0, z0, r` |
-| `ZCylinder` (also X, Y) | `x0, y0, r` |
-| `ZCone` (also X, Y) | `x0, y0, z0, r2` |
-| `XTorus` / `YTorus` / `ZTorus` | `y0, z0, a, b, c` |
-| `Quadric` | Full 10-coefficient form |
+| Python expression | Region type | Containment rule |
+|---|---|---|
+| `-surf` / `+surf` | `Halfspace` | surface equation sign |
+| `A & B` | `Intersection` | point in **all** sub-regions |
+| `A \| B` | `Union` | point in **any** sub-region |
+| `~A` | `Complement` | De Morgan inversion |
 
-Every surface has a `boundary_type` (`'transmission'`, `'vacuum'`, `'reflective'`, `'periodic'`, `'white'`) and can be translated or rotated non-destructively with `.translate()` / `.rotate()`.
-
-### Region Algebra
-
-Boolean region expressions are built with Python operators on `Halfspace` objects:
-
-```python
-cyl  = openmc.ZCylinder(r=0.43)
-top  = openmc.ZPlane(z0= 190.0)
-bot  = openmc.ZPlane(z0=-190.0)
-
-fuel_region   = -cyl & +bot & -top   # Intersection  (&)
-outer_region  = +cyl | +top | -bot   # Union          (|)
-complement    = ~fuel_region          # Complement     (~)
-```
-
-The three concrete `Region` subclasses are `Intersection`, `Union`, and `Complement`; all support `bounding_box`, `.translate()`, `.rotate()`, and `.clone()`. A text expression parser (`Region.from_expression`) accepts infix strings like `"(1 -2) | ~(3 -4)"` using surface IDs.
-
-### Cells
-
-`openmc.Cell` ties a spatial `region` to a `fill`:
-
-```python
-fuel_cell = openmc.Cell(name='fuel', region=fuel_region, fill=fuel)
-void_cell = openmc.Cell(region=~fuel_region)   # fill=None → void
-```
-
-The `fill_type` property returns one of `'material'`, `'universe'`, `'lattice'`, `'distribmat'`, or `'void'`. Cells filled with a universe or lattice accept `translation` and `rotation` attributes to position the sub-geometry.
-
-### Universes
-
-`openmc.Universe` is an ordered collection of cells that can be reused anywhere in the geometry tree. Universes nest arbitrarily, enabling complex hierarchical models.
-
-```python
-pin_universe = openmc.Universe(name='pin', cells=[fuel_cell, clad_cell, water_cell])
-```
-
-`DAGMCUniverse` is an alternative that references a CAD-based `.h5m` file instead of CSG cells, enabling mixed CSG+CAD models (requires the DAGMC optional build flag).
+Regions also support `from_expression(string, surfaces)` to parse an infix expression string (e.g. `"-1 & (2 | -3)"`) using the shunting-yard algorithm.
 
 ### Lattices
 
-Lattices repeat a grid of universes efficiently without duplicating cell definitions.
-
-**`RectLattice`** — Cartesian grid:
+`RectLattice` and `HexLattice` tile space with repeating `Universe` instances:
 
 ```python
 lattice = openmc.RectLattice()
-lattice.pitch      = [1.26, 1.26]          # cm, (x, y)
-lattice.lower_left = [-10.71, -10.71]
-lattice.universes  = [[pin_universe]*17]*17  # 17×17 array
-lattice.outer      = water_universe         # fills outside the grid
+lattice.pitch = (1.26, 1.26)          # cm per tile
+lattice.lower_left = (-6.3, -6.3)
+lattice.universes = [[pin_u] * 10] * 10
+lattice.outer = water_universe         # fills outside lattice bounds
 ```
 
-**`HexLattice`** — Hexagonal grid, with universes specified ring-by-ring from center outward. The `orientation` attribute selects between flat-side (`'y'`) and pointy-top (`'x'`) layouts.
+`HexLattice` supports both `"x"` and `"y"` orientations for hexagonal packing. Lattices can be 2-D or 3-D.
 
-Lattice and Universe share an ID space (`Lattice.used_ids` aliases `UniverseBase.used_ids`).
+### DAGMC (CAD Geometry)
 
-### Top-Level Geometry
-
-`openmc.Geometry` wraps the root universe and provides convenience accessors:
+`DAGMCUniverse` wraps an `.h5m` CAD geometry file and integrates transparently into the hierarchy:
 
 ```python
-geom = openmc.Geometry(root=root_universe, merge_surfaces=True)
-geom.export_to_xml()          # writes geometry.xml
+dagmc_univ = openmc.DAGMCUniverse(
+    filename='model.h5m',
+    auto_geom_ids=True,
+    material_overrides={'mat:fuel': fuel_material}
+)
+geometry = openmc.Geometry(root=dagmc_univ)
 ```
 
-With `merge_surfaces=True`, duplicate surfaces (within `surface_precision` decimal places) are consolidated before export, reducing runtime overhead. `determine_paths()` traverses the full tree to assign instance counts and hierarchical path strings to every cell and material — required before accessing `cell.paths`.
+Under the hood (`src/dagmc.cpp`), the C++ `DAGUniverse` loads the `.h5m` file through MOAB/DagMC, builds an OBB-tree acceleration structure, and exposes `find_cell()`, `distance()`, and `contains()` virtual methods that the common tracking loop calls identically to CSG cells.
 
-### Composite Surfaces & TRISO Particles
+### C++ Particle Tracking
 
-`openmc.model.CompositeSurface` bundles multiple primitives into one shape. Built-in shapes include `CylinderSector`, `IsogonalOctagon`, `RectangularParallelepiped`, and one-sided cones. Like simple surfaces, they expose `+` / `-` operators returning `Region` objects, and their component surfaces move together under `.translate()` / `.rotate()`.
+The C++ core (`src/geometry.cpp`, `include/openmc/geometry.h`) tracks particles through the geometry hierarchy with two hot-path functions:
 
-`openmc.model.TRISO` (a `Cell` subclass) represents a single TRISO micro-fuel particle. Its companion functions `pack_trisos` and `create_triso_universe` automate random packing into a matrix:
+- **`exhaustive_find_cell(GeometryState&)`** — full search from the root used at particle birth or after large jumps.
+- **`neighbor_list_find_cell(GeometryState&)`** — fast path on surface crossings using cached neighbor lists stored on each cell.
+- **`distance_to_boundary(GeometryState&)`** — walks every coordinate level, calls the virtual `Cell::distance()` (CSG or DAGMC), also checks lattice tile boundaries.
 
-```python
-spheres = openmc.model.pack_trisos(
-    radius=0.04, fill=triso_fill, domain=pebble_region, packing_fraction=0.40)
-triso_univ = openmc.model.create_triso_universe(
-    trisos=spheres, matrix_material=graphite, domain_radius=1.5)
-```
+At each coordinate level the tracker descends from universe → cell → fill, applying translation/rotation transforms for universe-filled cells along the way. The recursion terminates when a material-filled (leaf) cell is reached.
 
-### ID Management
+### Key Design Principles
 
-Every geometry object class (`Surface`, `Cell`, `Material`, `Universe`, `Lattice`) inherits from `IDManagerMixin`. IDs auto-increment from `next_id` within each class's own namespace. Passing an explicit `id` emits `IDWarning` on collision. `openmc.reset_auto_ids()` resets all counters — essential between pytest fixtures.
+- **Hierarchical composition**: Universes inside cells inside universes — arbitrarily deep nesting.
+- **Virtual dispatch**: `Universe::find_cell()` and `Cell::distance()` are virtual, enabling CSG and DAGMC to coexist.
+- **Neighbor lists**: After each surface crossing, only neighboring cells (stored on each `Cell`) are searched, dramatically reducing containment checks.
+- **Distribcells**: A single `Cell` object may have multiple instances; `cell_instance_at_level()` computes a unique index for spatially varying material assignments.
+- **XML round-trip**: All Python objects implement `to_xml_element()` / `from_xml_element()`, and `Geometry.export_to_xml()` writes the complete geometry description consumed by the C++ solver.
 
-## Monte Carlo Particle Transport
+## Particle Transport & Physics
 
 <details>
 <summary>Relevant Files</summary>
 
 <ul>
-<li><code>src/simulation.cpp</code></li>
-<li><code>src/particle.cpp</code></li>
-<li><code>src/physics.cpp</code></li>
-<li><code>src/physics_common.cpp</code></li>
-<li><code>src/eigenvalue.cpp</code></li>
-<li><code>src/event.cpp</code></li>
-<li><code>src/source.cpp</code></li>
 <li><code>include/openmc/particle.h</code></li>
 <li><code>include/openmc/particle_data.h</code></li>
-<li><code>include/openmc/source.h</code></li>
-<li><code>include/openmc/eigenvalue.h</code></li>
-<li><code>openmc/source.py</code></li>
+<li><code>include/openmc/physics.h</code></li>
+<li><code>src/particle.cpp</code></li>
+<li><code>src/particle_data.cpp</code></li>
+<li><code>src/physics.cpp</code></li>
+<li><code>src/physics_common.cpp</code></li>
+<li><code>src/physics_mg.cpp</code></li>
+<li><code>src/photon.cpp</code></li>
+<li><code>src/source.cpp</code></li>
+<li><code>src/event.cpp</code></li>
+<li><code>src/eigenvalue.cpp</code></li>
 </ul>
 
 </details>
 
-OpenMC implements a **continuous-energy Monte Carlo** particle transport algorithm. Neutrons (and optionally photons, electrons, and positrons) are tracked from birth through a series of physical events until they are absorbed, leak out, or fall below an energy cutoff. Statistical results are accumulated across many such histories.
+OpenMC simulates particle transport using a Monte Carlo method: particles are tracked individually through geometry, interacting with materials according to nuclear data cross sections. The C++ core handles two transport modes—**history-based** (default) and **event-based**—and supports neutrons, photons, electrons, and positrons.
 
-### Simulation Hierarchy
+### Particle Class Hierarchy
 
-The top-level entry point `openmc_run()` (in `src/simulation.cpp`) organizes work into three nested levels:
+The `Particle` class is built on a three-level inheritance chain:
 
-```mermaid
-flowchart TD
-    A["openmc_run()"] --> B["openmc_simulation_init()"]
-    A --> C["openmc_next_batch() × N_batches"]
-    C --> D["initialize_batch()"]
-    C --> E["transport loop × N_generations"]
-    E --> F["initialize_generation()"]
-    E --> G["transport particles (OpenMP)"]
-    E --> H["finalize_generation(): k-eff, entropy, sync bank"]
-    C --> I["finalize_batch(): write statepoint"]
-    A --> J["openmc_simulation_finalize()"]
-```
+- **`GeometryState`** — tracks the particle's nested position through universes and lattices (a stack of `LocalCoord` entries, one per nesting level)
+- **`ParticleData`** — extends `GeometryState` with physics state: energy, weight, cross-section caches, RNG seeds, and the secondary particle bank
+- **`Particle`** — adds high-level event methods (`event_calculate_xs`, `event_advance`, `event_collide`, etc.) and lifecycle logic
 
-Each **batch** contains one or more **generations**. Within a generation every source particle is tracked to completion before results are combined.
-
-### Particle Data Structures
-
-The `ParticleData` struct (in `include/openmc/particle_data.h`) carries all state for a live particle. The `Particle` class (in `include/openmc/particle.h`) extends it with transport event methods.
-
-The companion `SourceSite` struct represents a banked particle (in the fission bank or source bank):
-
-```cpp
-struct SourceSite {
-    Position r;           // Position [cm]
-    Direction u;          // Direction (unit vector)
-    double E;             // Energy [eV]
-    double wgt {1.0};     // Statistical weight
-    int delayed_group;    // 0 = prompt neutron
-    ParticleType particle;
-};
-```
-
-Per-nuclide cross section values are cached in `NuclideMicroXS` and aggregated into `MacroXS` for the current material, avoiding redundant lookups within a single event.
-
-### History-Based Transport (Default)
-
-Each particle is tracked through a sequential event loop inside `transport_history_based_single_particle()`:
-
-1. **`event_calculate_xs`** — locate the particle's cell and compute macroscopic cross sections.
-2. **`event_advance`** — sample a collision distance `d = -ln(ξ) / Σ_t`, find the nearest boundary, move the particle by `min(d, d_boundary)`, and score track-length tallies.
-3. **`event_cross_surface`** or **`event_collide`** — depending on which distance was smaller.
-4. **`event_revive_from_secondary`** — if the particle died but left secondaries in the local bank, pop one and continue.
-5. **`event_death`** — accumulate k-eff estimator contributions to shared accumulators.
-
-OpenMP parallelizes across particles with one thread per history, giving implicit load balancing with no inter-particle synchronization required during transport.
-
-### Event-Based Transport (Optional)
-
-Enabled via the `--event` run flag, `transport_event_based()` (in `src/event.cpp`) groups all in-flight particles by their next event type into queues (calculate-xs, advance, surface-crossing, collision). The longest queue is processed first, improving cache locality at the cost of higher memory usage. Separate queues exist for fuel and non-fuel cross section lookups, reflecting the dominant workload in reactor problems.
-
-### Physics Interactions
-
-`collision()` in `src/physics.cpp` dispatches based on particle type:
-
-- **Neutrons**: Sample the colliding nuclide proportional to `n_i * σ_t,i`. Then choose elastic scatter, inelastic scatter, or absorption. If the nuclide is fissionable, call `create_fission_sites()` to bank fission neutrons. Apply Russian roulette via `apply_russian_roulette()` to control low-weight particles.
-- **Photons**: Choose coherent (Rayleigh) scatter, incoherent (Compton) scatter, photoelectric absorption, or pair production, each weighted by their partial cross sections.
-
-Thermal scattering S(α,β) tables are used when available, correlating outgoing energy and angle for bound nuclei.
-
-### Eigenvalue (Criticality) Problems
-
-For k-eigenvalue mode, three independent k-eff estimators are accumulated and combined with minimum-variance weights:
-
-| Estimator | Formula |
-|---|---|
-| Track-length | `Σ w·d·νΣ_f` along flight paths |
-| Collision | `Σ w·νΣ_f/Σ_t` at collision points |
-| Absorption | `Σ w·νΣ_f/Σ_a` at absorption events |
-
-At the end of each generation, `finalize_generation()` (in `src/eigenvalue.cpp`) calls `synchronize_bank()`, which uses **uniform combing** — a deterministic, reproducible sampling method — to down-sample the fission bank to exactly `n_particles` sites before redistributing them across MPI ranks for the next generation.
-
-### Source Sampling
-
-The abstract `Source` base class (in `src/source.cpp`) defines a `sample(seed)` interface. Derived types include:
-
-- **`IndependentSource`** — independent spatial, angular, energy, and time distributions.
-- **`FileSource`** — reads sites from an HDF5 file.
-- **`MeshSource`** — volumetric source defined on a mesh.
-- **`CompiledSourceWrapper`** — dynamically loaded user-defined source library.
-
-Rejection sampling enforces optional constraints (cell/material domain, energy range, fissionable material only). The Python API in `openmc/source.py` mirrors these types with `IndependentSource`, `FileSource`, and `MeshSource` classes that serialize to XML for the C++ solver.
-
-## Nuclear Data & Cross Sections
-
-<details>
-<summary>Relevant Files</summary>
-
-<ul>
-<li><code>openmc/data/neutron.py</code></li>
-<li><code>openmc/data/ace.py</code></li>
-<li><code>openmc/data/endf.py</code></li>
-<li><code>openmc/data/reaction.py</code></li>
-<li><code>openmc/data/resonance.py</code></li>
-<li><code>openmc/data/thermal.py</code></li>
-<li><code>openmc/data/photon.py</code></li>
-<li><code>openmc/data/library.py</code></li>
-<li><code>openmc/data/function.py</code></li>
-<li><code>src/cross_sections.cpp</code></li>
-<li><code>src/nuclide.cpp</code></li>
-<li><code>include/openmc/nuclide.h</code></li>
-<li><code>include/openmc/cross_sections.h</code></li>
-</ul>
-
-</details>
-
-OpenMC separates nuclear data handling into two layers: a **Python data module** (`openmc.data`) responsible for reading, converting, and exporting nuclear data files, and a **C++ runtime layer** that loads preconverted HDF5 files at simulation startup for fast particle-transport calculations.
-
-### Data Pipeline Overview
+This layered design keeps geometry-agnostic state separate from physics state, which also simplifies GPU offloading.
 
 ```mermaid
 flowchart TD
-    endf["ENDF-6 Files\n(raw evaluation)"]
-    ace["ACE Format Files\n(NJOY-processed)"]
-    py["Python openmc.data\nIncidentNeutron / ThermalScattering / IncidentPhoton"]
-    hdf5["HDF5 Binary Files\n(*.h5)"]
-    xml["cross_sections.xml\n(catalog)"]
-    cpp["C++ Runtime\ncross_sections.cpp + nuclide.cpp"]
-    sim["Particle Transport\nNuclide::calculate_xs()"]
-
-    endf -->|"from_endf()"| py
-    ace -->|"from_ace()"| py
-    py -->|"export_to_hdf5()"| hdf5
-    hdf5 --> xml
-    xml -->|"read_cross_sections_xml()"| cpp
-    hdf5 -->|"Nuclide constructor"| cpp
-    cpp --> sim
+    GS["GeometryState\n(position, material, lattice stack)"]
+    PD["ParticleData\n(energy, weight, XS cache, RNG seeds, secondary bank)"]
+    P["Particle\n(event methods, transport logic)"]
+    GS --> PD --> P
 ```
 
-### Python Data Module (`openmc.data`)
+### Key Data Structures
 
-#### Reading Nuclear Data
+| Structure | Purpose |
+|-----------|---------|
+| `LocalCoord` | Position, direction, cell/universe/lattice indices at one nesting level |
+| `NuclideMicroXS` | Per-nuclide microscopic cross sections (total, absorption, fission) |
+| `MacroXS` | Summed macroscopic cross sections for the current material |
+| `SourceSite` | Banked particle state (position, direction, energy, weight, type) |
+| `BoundaryInfo` | Distance and surface ID for the nearest boundary crossing |
 
-The primary Python classes are constructed via factory methods that accept multiple source formats:
+Each particle carries a vector of `NuclideMicroXS` (one per nuclide in the material) and a single `MacroXS` aggregate. These caches are reused as long as the material and temperature are unchanged, avoiding redundant interpolation on the nuclear data energy grid.
 
-```python
-import openmc.data
+### History-Based Transport Loop
 
-# From pre-converted HDF5 (typical workflow)
-nuc = openmc.data.IncidentNeutron.from_hdf5('U235.h5')
-
-# From raw ENDF-6 file
-nuc = openmc.data.IncidentNeutron.from_endf('n-092_U_235.endf')
-
-# From ACE file produced by NJOY
-nuc = openmc.data.IncidentNeutron.from_ace('92235.710nc')
-
-# Export for use by OpenMC runtime
-nuc.export_to_hdf5('U235.h5')
-```
-
-#### Key Python Classes
-
-- **`IncidentNeutron`** — Top-level container for a nuclide's continuous-energy neutron data. Holds temperature-dependent energy grids, a dictionary of `Reaction` objects keyed by ENDF MT number, resolved/unresolved resonance data, and fission energy release.
-- **`Reaction`** — Encapsulates one nuclear reaction (e.g. MT=18 fission). Stores temperature-indexed cross sections (as `Tabulated1D` objects) and a list of `Product` objects describing outgoing particle distributions.
-- **`ThermalScattering`** — S(α,β) thermal scattering data for bound atoms (light water, graphite, etc.), with elastic and inelastic cross sections and angle–energy distributions.
-- **`IncidentPhoton`** — Photon interaction cross sections (Compton, Rayleigh, pair production, photoelectric) and atomic relaxation data.
-- **`DataLibrary`** — Registry mapping `(type, material_name)` pairs to HDF5 file paths; serialized as `cross_sections.xml`.
-
-#### Tabulated Functions (`openmc.data.function`)
-
-Cross sections and distributions are stored as `Function1D` subclasses with ENDF interpolation schemes (histogram, lin-lin, lin-log, log-log). The `Tabulated1D` class supports calling `xs(E)` to interpolate cross section values, and serializes directly to HDF5.
-
-#### Resonance Data (`openmc.data.resonance`)
-
-The `Resonances` container holds one or more `ResonanceRange` objects covering different energy intervals:
-
-- **`SingleLevelBreitWigner`** / **`MultiLevelBreitWigner`** — classic Breit-Wigner formalisms
-- **`RMatrixLimited`** — R-Matrix formalism for complex nuclides
-- **`Unresolved`** — probability tables for the unresolved resonance region (URR)
-
-### C++ Runtime Layer
-
-#### Library Catalog (`src/cross_sections.cpp`)
-
-At simulation startup OpenMC parses `cross_sections.xml` and populates two global structures in the `data::` namespace:
+The default transport mode processes one particle history completely before starting the next. The core loop in `transport_history_based_single_particle` advances a `Particle` through a sequence of events:
 
 ```cpp
-namespace data {
-  map<LibraryKey, size_t> library_map;  // (Type, nuclide_name) -> index
-  vector<Library> libraries;            // file paths and material lists
+while (p.alive()) {
+    p.event_calculate_xs();       // 1. Look up (or reuse) cross sections
+    p.event_advance();            // 2. Sample collision distance, move particle
+    if (boundary_closer)
+        p.event_cross_surface();  // 3a. Cross geometry boundary
+    else
+        p.event_collide();        // 3b. React with a nucleus
+    p.event_revive_from_secondary(); // 4. Continue as a secondary if needed
 }
+p.event_death();                  // 5. Accumulate global tallies
 ```
 
-`read_ce_cross_sections()` then iterates over every nuclide required by the geometry, locates its HDF5 file via `library_map`, and constructs a `Nuclide` object.
+The collision distance is sampled as `-ln(rand) / σ_total` (exponential distribution over mean free path). If the nearest surface is closer, the particle crosses it and geometry is updated; otherwise a nuclear reaction occurs.
 
-#### Nuclide Class (`include/openmc/nuclide.h`, `src/nuclide.cpp`)
+### Collision Physics
 
-The C++ `Nuclide` class is the runtime representation loaded from HDF5. Key members:
+`event_collide` dispatches to `collision()` (neutrons), `sample_photon_reaction()` (photons), or `sample_electron_reaction()` (electrons/positrons). For neutrons:
 
-- `grid_` — energy grids per temperature (used for binary search)
-- `xs_` — 3-D tensor `[temperature][energy_point][5]` with total, absorption, fission, nu-fission, and photon production cross sections
-- `reactions_` — vector of `Reaction` objects; `reaction_index_[MT]` provides O(1) lookup by MT number
-- `urr_data_` — unresolved resonance probability tables
+1. **Sample nuclide** — probability proportional to `σ_total × atom_density` for each nuclide in the material
+2. **Fission check** — if the nuclide is fissionable, sample a fission reaction and call `create_fission_sites()` to bank prompt/delayed neutrons
+3. **Secondary photons** — if photon transport is enabled, sample photon emission from inelastic reactions
+4. **Absorption / survival biasing** — apply implicit capture: reduce weight by `(1 − σ_abs/σ_total)` rather than killing the particle
+5. **Scattering** — sample reaction MT, outgoing energy from the appropriate distribution (S(α,β) thermal, free-gas, ACE tabulated), and a new direction
+6. **Variance reduction** — apply Russian roulette or weight windows
 
-Temperature handling supports three modes selected at runtime:
+### Fission Site Banking
 
-| Mode | Behavior |
-|------|----------|
-| `NEAREST` | Load single closest temperature |
-| `INTERPOLATION` | Load bracketing temperatures, interpolate at runtime |
-| `MULTIPOLE` | Reconstruct arbitrary temperatures with windowed multipole method |
-
-#### Cross Section Evaluation
-
-During transport, `Nuclide::calculate_xs()` is called for each particle–nuclide interaction:
-
-1. Locate the energy index via binary search on the log-spaced union energy grid.
-2. Read pre-tabulated cross sections from `xs_[i_temp][i_energy]`.
-3. Apply URR probability tables if the particle energy falls in the unresolved region.
-4. Return microscopic cross sections to the material routine for sampling.
-
-### HDF5 File Structure
-
-Each nuclide HDF5 file follows a standard hierarchy:
+In eigenvalue mode, `create_fission_sites()` determines the number of fission neutrons to bank:
 
 ```
-U235.h5
-├── Z, A, metastable, atomic_weight_ratio   (attributes)
-├── kTs/          294K, 600K, 900K ...      (temperatures in eV)
-├── energy/       294K=[...], 600K=[...]    (energy grids)
-├── reactions/
-│   ├── reaction_001   (MT=1 total)
-│   ├── reaction_002   (MT=2 elastic)
-│   ├── reaction_018   (MT=18 fission)
-│   └── reaction_102   (MT=102 capture)
-└── urr/          294K/, 600K/ ...          (probability tables)
+nu_t = (weight / k_eff) × ν̄ × (σ_f / σ_total)
+nu   = floor(nu_t) + Bernoulli(nu_t − floor(nu_t))
 ```
 
-### Adding a New Cross-Section Library
+Each site is stored as a `SourceSite` in the shared `simulation::fission_bank`. After each generation, `synchronize_bank()` resamples these sites using uniform combing (systematic sampling) to maintain a constant source population across MPI ranks, then swaps them into `simulation::source_bank` for the next generation.
 
-To register a new data library for use in simulations:
+### Photon Physics
 
-```python
-lib = openmc.data.DataLibrary()
-lib.register_file('path/to/U235.h5')   # auto-detects type and nuclide
-lib.register_file('path/to/H2O_sab.h5')
-lib.export_to_xml('cross_sections.xml')
+`sample_photon_reaction()` (in `src/photon.cpp`) selects among four interaction types based on per-element cross sections at the photon energy `E`:
+
+- **Coherent (Rayleigh) scattering** — elastic scatter with form-factor-weighted angle sampling
+- **Incoherent (Compton) scattering** — uses Klein-Nishina; creates a recoil electron as a secondary particle
+- **Photoelectric effect** — shell-dependent electron emission followed by atomic relaxation (fluorescent photons)
+- **Pair production** — creates an electron-positron pair; positron annihilation produces two 511 keV photons
+
+### Multigroup Mode
+
+When OpenMC is built with a multigroup cross-section library, `collision_mg()` (in `src/physics_mg.cpp`) replaces continuous-energy lookups with direct group-index access. The scatter operation samples an outgoing energy group from a matrix distribution, and `p.E()` is set to the group-average energy. The event structure and secondary banking remain identical to continuous-energy mode.
+
+### Event-Based Transport
+
+The alternative event-based mode (`transport_event_based` in `src/event.cpp`) batches all live particles by their next event type into shared queues:
+
+```mermaid
+flowchart LR
+    src["Source bank"] --> xs_q["Calculate XS queue"]
+    xs_q --> adv_q["Advance queue"]
+    adv_q -->|"boundary closer"| surf_q["Surface crossing queue"]
+    adv_q -->|"collision closer"| coll_q["Collision queue"]
+    surf_q --> xs_q
+    coll_q --> xs_q
 ```
 
-Set `OPENMC_CROSS_SECTIONS=/path/to/cross_sections.xml` (or pass it in `openmc.Settings`) and OpenMC will locate the right HDF5 file for every nuclide in the model.
+Processing each queue in an OpenMP parallel loop over many particles of the same type improves cache locality and is more GPU-friendly than the particle-by-particle history approach.
 
-## Tallies, Filters & Output
+### Secondary Particle Handling
+
+Reactions may produce secondaries stored in `p.secondary_bank()`. After a parent particle dies (weight falls to zero, or maximum event count reached), `event_revive_from_secondary()` pops the last entry from the bank and reinitializes the `Particle` from that `SourceSite`. The revived particle then continues the transport loop as if it were a new history, allowing deeply branching secondary chains to be processed without recursion.
+
+### Source Initialization
+
+`initialize_history()` (in `src/source.cpp`) seeds a particle from either:
+
+- **Eigenvalue mode**: a `SourceSite` drawn from `simulation::source_bank` (the previous generation's fission bank)
+- **Fixed-source mode**: a site sampled from user-defined spatial, energy, and angular distributions
+
+RNG seeds for each particle are computed deterministically from the particle index using multiple independent streams (`N_STREAMS`), ensuring reproducibility regardless of parallelism or batch ordering.
+
+### k-eff Estimators
+
+OpenMC tracks three independent k-eff estimators during each generation, accumulated into `global_tallies`:
+
+- **Tracklength**: `Σ wgt × distance × ν σ_f` — scored during `event_advance`
+- **Collision**: `Σ wgt × ν σ_f / σ_total` — scored at each collision
+- **Absorption**: `Σ wgt × fission fraction` — scored at absorptive events
+
+All three are combined and MPI-reduced at the end of each generation by `calculate_generation_keff()`.
+
+## Tally System & Scoring
 
 <details>
 <summary>Relevant Files</summary>
 
 <ul>
+<li><code>include/openmc/tallies/tally.h</code></li>
+<li><code>include/openmc/tallies/filter.h</code></li>
+<li><code>src/tallies/tally.cpp</code></li>
+<li><code>src/tallies/tally_scoring.cpp</code></li>
+<li><code>src/tallies/filter.cpp</code></li>
 <li><code>openmc/tallies.py</code></li>
 <li><code>openmc/filter.py</code></li>
 <li><code>openmc/statepoint.py</code></li>
-<li><code>openmc/summary.py</code></li>
-<li><code>openmc/mesh.py</code></li>
-<li><code>include/openmc/tallies/tally.h</code></li>
-<li><code>include/openmc/tallies/filter.h</code></li>
-<li><code>include/openmc/tallies/tally_scoring.h</code></li>
-<li><code>src/tallies/tally.cpp</code></li>
-<li><code>src/tallies/tally_scoring.cpp</code></li>
 <li><code>src/state_point.cpp</code></li>
 </ul>
 
 </details>
 
-OpenMC's tally system enables users to score physical quantities (flux, fission rate, heating, etc.) over arbitrary partitions of the simulation phase space. Every tally is defined by three orthogonal dimensions: **scores** (what to measure), **filters** (where/when to measure it), and **nuclides** (which isotopes to attribute it to).
+The tally system is OpenMC's mechanism for recording physical quantities (flux, reaction rates, currents) during particle transport. A tally combines three ingredients: **filters** that define which phase-space regions to bin, **scores** that name the quantity to accumulate, and **nuclides** that restrict scoring to a subset of isotopes.
 
-### Tally Definition
+```mermaid
+flowchart TD
+    P["Particle Transport Step"] --> E{"Event Type"}
+    E -->|"track-length"| TL["score_tracklength_tally()"]
+    E -->|"collision"| CL["score_collision_tally()"]
+    E -->|"surface crossing"| SC["score_surface_tally()"]
+    TL --> FM["Filter Matching\n(get_all_bins)"]
+    CL --> FM
+    SC --> FM
+    FM --> SI["Stride-based\nIndex Computation"]
+    SI --> ACC["Atomic Accumulate\nresults_(i, j) += score * weight"]
+    ACC --> BATCH["End of Batch\naccumulate() → SUM, SUM_SQ"]
+    BATCH --> HDF5["Write Statepoint HDF5"]
+```
 
-A `Tally` object is constructed in Python, populated with filters and scores, and then serialized to XML before the simulation runs.
+### Tally Data Structure
+
+The C++ `Tally` class (defined in `include/openmc/tallies/tally.h`) stores:
+
+- **`scores_`** — integer codes for quantities to record (e.g., `SCORE_FLUX`, `SCORE_TOTAL`, `SCORE_NU_FISSION`, or specific MT numbers)
+- **`nuclides_`** — indices into the global nuclide list; `-1` means "sum over all nuclides in the material"
+- **`filters_`** — ordered list of filter indices into `model::tally_filters`
+- **`strides_`** — stride per filter dimension for linearizing multi-dimensional bins
+- **`results_`** — 2D tensor of shape `[n_filter_bins, n_scores]` storing `VALUE`, `SUM`, and `SUM_SQ` moments
+- **`estimator_`** — one of `TRACKLENGTH`, `COLLISION`, or `ANALOG`
+
+The Python `Tally` class in `openmc/tallies.py` mirrors this structure. It inherits from `IDManagerMixin` for automatic ID assignment and exposes lazy-loaded statistical properties (`mean`, `std_dev`, `sum`, `sum_sq`) once a statepoint has been loaded.
+
+### Filters
+
+Filters partition phase space into discrete bins. Every filter subclass implements:
+
+```cpp
+virtual void get_all_bins(const Particle& p, TallyEstimator estimator,
+                          FilterMatch& match) const = 0;
+```
+
+`FilterMatch` collects the matching `bins_` and associated `weights_` for one particle state. Weights are normally `1.0` but can differ for probability-weighted filters (e.g., `LegendreFilter`, `EnergyFunctionFilter`).
+
+**Commonly used filter types:**
+
+| Category | Examples |
+|---|---|
+| Geometry | `CellFilter`, `MaterialFilter`, `UniverseFilter`, `SurfaceFilter` |
+| Energy | `EnergyFilter`, `EnergyoutFilter` |
+| Mesh | `MeshFilter`, `MeshSurfaceFilter` |
+| Angular | `MuFilter`, `PolarFilter`, `AzimuthalFilter` |
+| Expansion | `LegendreFilter`, `SphericalHarmonicsFilter`, `ZernikeFilter` |
+| Other | `TimeFilter`, `DelayedGroupFilter`, `ParticleFilter`, `CollisionFilter` |
+
+Multiple filters on a single tally create a **cross-product** of bins. The total filter bin count equals the product of each filter's `n_bins`. Stride-based indexing maps a combination `(b0, b1, …)` to a single flat index:
+
+```
+filter_index = b0 * stride[0] + b1 * stride[1] + …
+```
+
+### Scoring During Transport
+
+Three distinct scoring paths are dispatched at runtime based on the tally estimator:
+
+1. **Track-length** — called after every geometry step. Flux estimate: `weight × distance`.
+2. **Collision** — called at every collision site. Flux estimate: `weight / Σ_total`.
+3. **Analog** — called when actual physical events occur (fission, absorption). Scored directly from sampled outcomes.
+
+For surface tallies, `score_surface_tally()` is called on each crossing. Results are updated atomically using `#pragma omp atomic` so multiple OpenMP threads can score concurrently without locks.
+
+The inner loop over each active tally iterates a `FilterBinIter` that skips zero-weight combinations:
+
+```cpp
+for (auto [filter_index, filter_weight] : FilterBinIter(tally, p)) {
+    for (auto i_nuclide : tally.nuclides_) {
+        for (auto score_bin : tally.scores_) {
+            double score = compute_score(p, score_bin, i_nuclide, ...);
+            tally.results_(filter_index, score_bin_idx) += score * filter_weight;
+        }
+    }
+}
+```
+
+### Batch Accumulation and Statistics
+
+At the end of each batch, `Tally::accumulate()` normalizes the per-batch `VALUE` accumulator and folds it into running statistics:
+
+```
+SUM    += val
+SUM_SQ += val²
+VALUE   = 0   (reset for next batch)
+```
+
+When `higher_moments_` is enabled, `SUM_THIRD` and `SUM_FOURTH` are also tracked for variance-of-variance (`vov`) estimation.
+
+The mean and standard deviation are derived post-run:
+
+```
+mean    = SUM / n_realizations
+std_dev = sqrt((SUM_SQ/n - mean²) / (n - 1))
+```
+
+### Statepoint Output and Python Post-processing
+
+After the simulation, `src/state_point.cpp` writes tally results to an HDF5 statepoint file under `/tallies/tally {id}/`. The `openmc.StatePoint` class reads these back:
 
 ```python
 import openmc
 
-tally = openmc.Tally(name="fuel_flux")
-tally.filters = [openmc.EnergyFilter([0.0, 0.625e-6, 20.0])]
-tally.scores  = ["flux", "fission"]
-tally.nuclides = ["U235", "U238"]
+sp = openmc.StatePoint("statepoint.10.h5")
+tally = sp.tallies[1]
 
-tallies = openmc.Tallies([tally])
-tallies.export_to_xml()
+# Results array shape: (filter_bins, nuclides, scores)
+flux_mean = tally.get_values(scores=["flux"], value="mean")
+flux_unc  = tally.get_values(scores=["flux"], value="std_dev")
 ```
 
-Key `Tally` properties:
+Filters are reconstructed from HDF5 via `Filter.from_hdf5()`, preserving bin edges, IDs, and types. The flat results tensor is reshaped to `(n_filter_bins, n_nuclides, n_scores)` for convenient slicing and pandas-based DataFrame export via `tally.get_pandas_dataframe()`.
 
-- `scores` — list of reaction/quantity strings (`"flux"`, `"fission"`, `"heating"`, `"(n,2n)"`, etc.)
-- `filters` — ordered list of `Filter` objects that partition the phase space
-- `nuclides` — list of nuclide names or `"total"`
-- `estimator` — `"tracklength"` (default), `"collision"`, or `"analog"`
-- `multiply_density` — when `True`, reaction-rate scores are multiplied by number density
+### Global Registry
 
-### Filter Types
+All tallies and filters are owned by global collections in the `model` namespace:
 
-Filters are modular, composable phase-space binners. More than 30 filter subclasses are available, organized by the physical dimension they partition:
+- `model::tallies` — `vector<unique_ptr<Tally>>`
+- `model::tally_filters` — `vector<unique_ptr<Filter>>`
+- `model::active_tracklength_tallies`, `model::active_collision_tallies`, etc. — index lists rebuilt each batch to avoid scanning inactive tallies during transport
 
-| Category | Examples |
-|---|---|
-| Spatial | `CellFilter`, `MaterialFilter`, `UniverseFilter`, `MeshFilter` |
-| Energy | `EnergyFilter`, `EnergyOutFilter`, `EnergyFunctionFilter` |
-| Angular | `PolarFilter`, `AzimuthalFilter`, `LegendreFilter` |
-| Time / Particle | `TimeFilter`, `ParticleFilter`, `WeightFilter` |
-| Mesh-extended | `MeshSurfaceFilter`, `MeshBornFilter` |
+## Nuclear Data Processing
 
-`MeshFilter` wraps a mesh object (`RegularMesh`, `RectilinearMesh`, `CylindricalMesh`, `SphericalMesh`, or `UnstructuredMesh`) to produce spatially resolved tallies over the entire geometry.
+<details>
+<summary>Relevant Files</summary>
 
-```python
-mesh = openmc.RegularMesh()
-mesh.dimension = [10, 10, 1]
-mesh.lower_left  = [-100.0, -100.0, -1.0]
-mesh.upper_right = [ 100.0,  100.0,  1.0]
+<ul>
+<li><code>openmc/data/__init__.py</code></li>
+<li><code>openmc/data/neutron.py</code></li>
+<li><code>openmc/data/photon.py</code></li>
+<li><code>openmc/data/reaction.py</code></li>
+<li><code>openmc/data/endf.py</code></li>
+<li><code>openmc/data/ace.py</code></li>
+<li><code>openmc/data/library.py</code></li>
+<li><code>openmc/data/multipole.py</code></li>
+<li><code>src/nuclide.cpp</code></li>
+<li><code>src/cross_sections.cpp</code></li>
+<li><code>src/wmp.cpp</code></li>
+<li><code>include/openmc/nuclide.h</code></li>
+</ul>
 
-tally.filters = [openmc.MeshFilter(mesh)]
-tally.scores  = ["flux"]
-```
+</details>
 
-### Score Accumulation in C++
+The `openmc/data` module handles reading, converting, and managing nuclear cross-section data. It supports multiple input formats and exports them to OpenMC's native HDF5 layout, which is then loaded by the C++ transport engine at runtime.
 
-During transport the C++ engine evaluates each active tally at every scoring event. The sequence is:
+### Supported Data Formats
+
+OpenMC ingests nuclear data from three primary formats:
+
+- **ENDF/B** — Raw evaluated nuclear data from NNDC. Processed by NJOY into ACE files before use.
+- **ACE** — Compact tabular format used by MCNP and Serpent. The Python API can read ACE tables directly and convert them.
+- **HDF5** — OpenMC's native format (version 3.0). All data is ultimately stored here for fast runtime access.
+- **Windowed Multipole (WMP)** — An optional compact resonance representation enabling on-the-fly Doppler broadening without pre-processed temperature grids.
+
+### Data Processing Pipeline
 
 ```mermaid
 flowchart TD
-    A["Particle event (track / collision / reaction)"] --> B["Iterate active tallies"]
-    B --> C["Filter matching: get_all_bins()"]
-    C --> D{"All filters matched?"}
-    D -->|"No"| E["Skip tally"]
-    D -->|"Yes"| F["Compute score × weight × filter weights"]
-    F --> G["Accumulate into results tensor"]
-    G --> H["Next tally"]
+    endf["ENDF/B Source Files"]
+    njoy["NJOY Processing"]
+    ace["ACE Tables"]
+    pyapi["Python API\n(IncidentNeutron, ThermalScattering)"]
+    hdf5["HDF5 Data Files"]
+    xmlindex["cross_sections.xml"]
+    cpp["C++ Runtime\n(Nuclide, ThermalScattering)"]
+    sim["Particle Transport"]
+
+    endf --> njoy --> ace --> pyapi
+    pyapi --> hdf5 --> xmlindex --> cpp --> sim
 ```
 
-The results tensor has shape `(filter_bins, nuclide_bins, score_bins)` stored as a flat array. OpenMC precomputes **strides** for each filter so the innermost (last-added) filter varies fastest in memory, enabling cache-friendly accumulation.
+The `openmc.data.njoy` submodule wraps NJOY calls (`make_ace`, `make_pendf`, `make_ace_thermal`) to automate this conversion. Once HDF5 files exist, they are indexed by a `cross_sections.xml` file managed by `DataLibrary`.
 
-Three estimators control *when* accumulation happens:
+### Key Python Classes
 
-- **Tracklength** — continuous flight path integral; lowest variance, most widely applicable
-- **Collision** — scores only at collision sites
-- **Analog** — records actual physical reactions; required for certain scores (e.g., delayed neutron emission)
+#### IncidentNeutron
 
-### Statepoint Output (HDF5)
+`IncidentNeutron` (`openmc/data/neutron.py`) is the central class for continuous-energy neutron data. It holds:
 
-After each batch (or the final batch), OpenMC writes a statepoint HDF5 file via `openmc_statepoint_write()` in `src/state_point.cpp`. The file layout is:
-
-```
-statepoint.N.h5
-├── /global_tallies/          ← k-eff, leakage
-├── /tallies/
-│   ├── /filters/filter_<id>/  ← type, bins, n_bins
-│   ├── /meshes/mesh_<id>/     ← mesh geometry
-│   └── /tally_<id>/
-│       ├── name, estimator, scores, nuclides, filters
-│       ├── sum       (float64 tensor)
-│       ├── sum_sq    (float64 tensor)
-│       └── sum_third / sum_fourth  (for higher moments)
-└── /source_bank/             ← fission source (if written)
-```
-
-### Reading Results in Python
-
-The `StatePoint` class provides lazy-loaded access to simulation output. Tallies reconstruct their filter/score structure from the HDF5 metadata and compute statistics on demand.
+- `reactions` — a dict mapping ENDF MT numbers to `Reaction` objects
+- `energy` — temperature-dependent energy grids
+- `kTs` — list of temperatures in eV
+- `resonances`, `urr` — resolved/unresolved resonance data
 
 ```python
-with openmc.StatePoint("statepoint.10.h5") as sp:
-    t = sp.tallies[1]           # Tally object with results loaded
-    mean   = t.mean             # shape: (filter_bins, nuclide_bins, score_bins)
-    stddev = t.std_dev
+import openmc.data
 
-    # Slice by score name
-    flux = t.get_values(scores=["flux"])
+nuc = openmc.data.IncidentNeutron.from_ace('U235.ace')
+nuc.export_to_hdf5('U235.h5')
+
+# Or read from an existing HDF5 file
+nuc = openmc.data.IncidentNeutron.from_hdf5('U235.h5')
+print(nuc[18])  # MT=18 fission reaction
 ```
 
-Mean and standard deviation are derived from the raw moments:
+#### Reaction and Product
 
-- `mean = sum / n_realizations`
-- `std_dev = sqrt(sum_sq / n_realizations - mean²)`
+Each `Reaction` object (in `openmc/data/reaction.py`) wraps a single ENDF reaction channel:
 
-The companion `Summary` class reconstructs the full input geometry from `summary.h5`, which the `StatePoint` can link to for resolving cell/material names during post-processing.
+- `xs` — dict of `Tabulated1D` cross sections keyed by temperature string (e.g., `"294K"`)
+- `products` — list of `Product` objects describing secondary particle distributions
+- `mt` — ENDF MT number; `q_value` — reaction Q-value
+- `redundant` — flag for reactions defined as sums of others (e.g., MT=3 = sum of inelastic channels)
 
-### Typical Workflow
+#### DataLibrary
 
-1. **Define** tallies, filters, and scores in Python
-2. **Export** to XML (`tallies.export_to_xml()`)
-3. **Run** the simulation (`openmc.run()`)
-4. **Open** the statepoint (`openmc.StatePoint(...)`)
-5. **Extract** `mean` / `std_dev` arrays for each tally and post-process
+`DataLibrary` (`openmc/data/library.py`) manages the `cross_sections.xml` index file. It maps nuclide names to HDF5 file paths and is the interface between Python model setup and the C++ loader.
 
-This clean separation between input definition (XML), transport scoring (C++), and result retrieval (Python/HDF5) makes it straightforward to add new filter types or post-processing routines without touching the transport kernel.
+```python
+lib = openmc.data.DataLibrary()
+lib.register_file('U235.h5')
+lib.register_file('lwtr.h5')   # thermal scattering for light water
+lib.export_to_xml('cross_sections.xml')
+```
+
+### Windowed Multipole (WMP) Method
+
+WMP (`openmc/data/multipole.py`, `src/wmp.cpp`) enables on-the-fly Doppler broadening using a pole-residue representation of resonances. Instead of storing cross sections at many pre-broadened temperatures, poles and residues are stored once and evaluated analytically at any temperature using the Faddeeva function.
+
+The energy axis is divided into windows (equally spaced in `sqrt(E)`). Within each window, only the nearby poles contribute; far-away resonances are captured by a polynomial curvefit. This keeps evaluation fast even for heavy nuclides with thousands of resonances.
+
+```python
+wmp = openmc.data.WindowedMultipole.from_hdf5('U238_wmp.h5')
+# Evaluate elastic, absorption, fission XS at 1 eV, 900 K
+elastic, absorption, fission = wmp(1.0, 900.0)
+```
+
+### HDF5 File Layout
+
+OpenMC's HDF5 format is hierarchical. For a neutron data file the top-level groups are:
+
+```
+U235.h5
+├── filetype  "data_neutron"
+├── version   [3, 0]
+└── U235/
+    ├── Z, A, metastable, atomic_weight_ratio
+    ├── kTs/          ← temperatures in eV
+    ├── energy/       ← energy grids per temperature
+    ├── reactions/
+    │   ├── reaction_002/  (MT=2 elastic)
+    │   ├── reaction_018/  (MT=18 fission)
+    │   └── ...
+    ├── urr/          ← unresolved resonance probability tables
+    └── fission_energy_release/
+```
+
+### C++ Runtime: Nuclide and Cross Section Lookup
+
+At runtime the C++ `Nuclide` class (`include/openmc/nuclide.h`, `src/nuclide.cpp`) loads an HDF5 file and stores:
+
+- `grid_` — energy grids per temperature
+- `xs_` — 3D tensor (temperature × energy point × reaction type)
+- `multipole_` — optional `WindowedMultipole` for on-the-fly broadening
+- `urr_data_` — probability tables for the unresolved resonance region
+
+During transport, `Material::calculate_xs` iterates over each nuclide and calls into `Nuclide::calculate_xs`. That function checks whether WMP data is available and, if so, evaluates it; otherwise it performs log-binary search plus linear interpolation on the stored grid. Thermal S(α,β) corrections are applied on top when applicable.
+
+### Photon Data
+
+`IncidentPhoton` (`openmc/data/photon.py`) follows the same design pattern as `IncidentNeutron`. It covers photoelectric (per subshell, MT 534+), Compton scattering, and pair production. Pre-computed Compton profiles and bremsstrahlung data are bundled as HDF5 resources inside the package.
 
 ## Depletion & Burnup
 
@@ -818,299 +813,134 @@ This clean separation between input definition (XML), transport scoring (C++), a
 <summary>Relevant Files</summary>
 
 <ul>
-<li><code>openmc/deplete/abc.py</code></li>
+<li><code>openmc/deplete/__init__.py</code></li>
+<li><code>openmc/deplete/openmc_operator.py</code></li>
 <li><code>openmc/deplete/coupled_operator.py</code></li>
 <li><code>openmc/deplete/independent_operator.py</code></li>
 <li><code>openmc/deplete/integrators.py</code></li>
 <li><code>openmc/deplete/chain.py</code></li>
-<li><code>openmc/deplete/cram.py</code></li>
+<li><code>openmc/deplete/atom_number.py</code></li>
 <li><code>openmc/deplete/results.py</code></li>
-<li><code>openmc/deplete/reaction_rates.py</code></li>
-<li><code>openmc/deplete/microxs.py</code></li>
+<li><code>openmc/deplete/cram.py</code></li>
+<li><code>openmc/deplete/transfer_rates.py</code></li>
 </ul>
 
 </details>
 
-The depletion (burnup) system in OpenMC solves the Bateman equations to track nuclide density evolution over time as fuel absorbs neutrons and undergoes fission. It is organized into three cooperating layers: **operators** that compute reaction rates, **integrators** that advance the solution in time, and **solvers** that evaluate the matrix exponential at each step.
-
-```mermaid
-flowchart TD
-    model["OpenMC Model"] --> op["Operator\n(CoupledOperator / IndependentOperator)"]
-    chain["Depletion Chain\n(chain.py)"] --> op
-    op --> integrator["Integrator\n(CECM, CF4, Predictor, …)"]
-    integrator --> cram["CRAM Solver\n(CRAM16 / CRAM48)"]
-    cram --> results["Results HDF5\n(depletion_results.h5)"]
-    results --> postproc["Post-processing\n(Results class)"]
-```
-
-### Operators
-
-An **operator** is responsible for computing reaction rates for each burnable material. Two concrete implementations are provided:
-
-- **`CoupledOperator`** (`coupled_operator.py`) — tightly couples depletion to OpenMC transport. On each timestep it calls the OpenMC C library to run a transport simulation, tallies reaction rates, and returns an `OperatorResult`. Normalization and fission-yield modes can be configured at construction time.
-
-- **`IndependentOperator`** (`independent_operator.py`) — uses pre-computed multigroup fluxes and microscopic cross-sections (`MicroXS` objects) instead of running transport. Suitable for stand-alone burnup or sensitivity studies without repeated Monte Carlo runs.
-
-Both share a common abstract parent defined in `abc.py` (`TransportOperator`) that specifies the interface: `initial_condition()`, `__call__(vec, source_rate)`, `finalize()`, and helpers for reaction-rate tallying, normalization, and fission yields.
-
-### Depletion Chain
-
-`Chain` (`chain.py`) is the nuclear data backbone of the depletion system. It stores every nuclide's half-life, decay modes, and transmutation reactions read from an XML chain file (or built directly from ENDF files).
-
-Key capabilities:
-
-- `form_matrix(rates, fission_yields)` — assembles the sparse transmutation matrix **A** combining decay and reaction terms.
-- `reduce(initial_isotopes, level)` — prunes the chain to only nuclides reachable within `level` transmutation steps, reducing matrix size for efficiency.
-- `decay_matrix` property — returns a cached sparse matrix for decay-only calculations.
-
-### Integrators
-
-Integrators loop over timesteps and orchestrate calls to the operator and CRAM solver. All inherit from `Integrator` in `abc.py`. The available schemes are:
-
-| Class | Order | Transport calls/step |
-|---|---|---|
-| `PredictorIntegrator` | 1 | 1 |
-| `CECMIntegrator` | 2 | 2 |
-| `CELIIntegrator` | 2 | 2 |
-| `LEQIIntegrator` | 3–4 | 2 |
-| `CF4Integrator` | 4 | 4 |
-| `EPCRK4Integrator` | 4 | 4 |
-| `SICELIIntegrator` | 2 (SI) | 2 × n_steps |
-| `SILEQIIntegrator` | 3–4 (SI) | 2 × n_steps |
-
-Stochastic Implicit (SI) variants iterate the corrector step multiple times (`n_steps`, default 10) to reduce statistical noise, at the cost of additional transport solves.
-
-Advanced control hooks available on all integrators:
-
-- `add_transfer_rate(material, components, rate)` — continuous material feed or removal.
-- `add_external_source_rate(material, composition, rate)` — inject nuclides from outside.
-- `add_keff_search_control(function, x0, x1)` — adjust a parameter each step to hit a target k-eff.
-
-### CRAM Solver
-
-The Chebyshev Rational Approximation Method (CRAM) solver in `cram.py` evaluates the matrix exponential `exp(A·dt)·n₀` via an incomplete partial factorization (IPF) of a rational approximation. Two instances are exported:
-
-- `CRAM16` — 16th-order, faster, lower accuracy.
-- `CRAM48` — 48th-order (default), higher accuracy for stiff systems.
-
-Both accept a `substeps` argument. When `substeps > 1`, the interval is split into equal sub-intervals sharing pre-computed LU factorizations for efficiency.
-
-### Microscopic Cross-Sections
-
-`MicroXS` (`microxs.py`) holds a 3-D array of shape `(n_nuclides, n_reactions, n_groups)` in barns. It is the primary input for `IndependentOperator` and can be created several ways:
-
-```python
-# From a full OpenMC transport simulation
-fluxes, micros = openmc.deplete.get_microxs_and_flux(model, domains, energies)
-
-# From a CSV file
-micros = openmc.deplete.MicroXS.from_csv("micro_xs.csv")
-```
-
-### Reaction Rates
-
-`ReactionRates` (`reaction_rates.py`) is a NumPy ndarray subclass with string-based indexing over materials, nuclides, and reactions. It is populated by the operator after each transport solve and consumed by the integrator when building the transmutation matrix.
-
-```python
-rate = reaction_rates.get("mat_1", "U235", "fission")  # returns float
-```
-
-### Results and Post-processing
-
-`Results` (`results.py`) is a list of `StepResult` objects backed by an HDF5 file. After a depletion run, it provides convenient accessors:
-
-```python
-results = openmc.deplete.Results("depletion_results.h5")
-
-times, keff   = results.get_keff(time_units='d')
-times, atoms  = results.get_atoms("1", "Pu239", time_units='d')
-times, heat   = results.get_decay_heat("1", units='W/cm3')
-
-# Export depleted compositions for a follow-on simulation
-mats = results.export_to_materials(-1)  # last burnup step
-```
-
-### Minimal Usage Example
-
-```python
-import openmc
-import openmc.deplete
-
-# Build model and specify chain file
-model = openmc.Model(...)
-chain_file = "/path/to/chain_endfb80_pwr.xml"
-
-# Create coupled operator and integrator
-operator = openmc.deplete.CoupledOperator(model, chain_file)
-integrator = openmc.deplete.CECMIntegrator(
-    operator,
-    timesteps=[30, 30, 30],   # days
-    power=1.0e6,              # watts
-    timestep_units='d'
-)
-
-# Run depletion
-integrator.integrate()
-
-# Post-process
-results = openmc.deplete.Results("depletion_results.h5")
-times, keff = results.get_keff(time_units='d')
-```
-
-## Python API & C API Bindings
-
-<details>
-<summary>Relevant Files</summary>
-
-<ul>
-<li><code>openmc/lib/__init__.py</code></li>
-<li><code>openmc/lib/core.py</code></li>
-<li><code>openmc/lib/cell.py</code></li>
-<li><code>openmc/lib/material.py</code></li>
-<li><code>openmc/lib/tally.py</code></li>
-<li><code>openmc/lib/filter.py</code></li>
-<li><code>openmc/lib/settings.py</code></li>
-<li><code>openmc/lib/nuclide.py</code></li>
-<li><code>openmc/lib/error.py</code></li>
-<li><code>include/openmc/capi.h</code></li>
-<li><code>openmc/mixin.py</code></li>
-<li><code>openmc/checkvalue.py</code></li>
-</ul>
-
-</details>
-
-The `openmc.lib` package provides Python bindings to the OpenMC shared library (`libopenmc.so`/`libopenmc.dylib`) using Python's `ctypes` module. This lets Python code call into the running simulation engine at runtime — inspecting and modifying cells, materials, tallies, and simulation state without restarting or re-reading XML input files.
+The `openmc.deplete` module implements burnup and radioactive decay calculations. It evolves material compositions over time by solving the Bateman equations — a coupled system of ODEs describing how nuclide populations change due to neutron reactions and radioactive decay.
 
 ### Architecture Overview
 
 ```mermaid
 flowchart TD
-    pyapi["Python API (openmc.*)"]
-    lib["openmc.lib (ctypes bindings)"]
-    capi["C API (capi.h extern C functions)"]
-    cpp["C++ Core (libopenmc.so)"]
-
-    pyapi -->|"high-level model building"| xmlio["XML Input Files"]
-    lib -->|"ctypes _dll calls"| capi
-    capi -->|"compiled into"| cpp
-    lib -->|"runtime mutation"| cpp
+    model["openmc.Model"] --> op["Transport Operator"]
+    chain["Chain (chain.xml)"] --> op
+    op --> integrator["Integrator (e.g. CECMIntegrator)"]
+    integrator -->|"transport step"| op
+    integrator -->|"deplete step"| cram["CRAM Solver"]
+    cram --> results["Results (depletion_results.h5)"]
+    results --> post["Post-processing (get_atoms, get_activity)"]
 ```
 
-The C++ library exposes a flat `extern "C"` interface in `include/openmc/capi.h`. Every function follows the `openmc_*` naming convention and returns an integer error code (0 = success, negative = error). Python's `ctypes` wraps these symbols through the `_dll` object loaded at import time.
+The key design separates **what** to simulate (the operator) from **how** to integrate over time (the integrator). This makes it easy to swap integration strategies without changing the physics model.
 
-### Loading the Shared Library
+### Transport Operators
 
-When `openmc.lib` is imported, `__init__.py` loads `libopenmc.so` (or `.dylib` on macOS) using `ctypes.CDLL`:
+Two concrete operators implement `OpenMCOperator` (which itself extends `TransportOperator`):
+
+- **`CoupledOperator`** — Runs full Monte Carlo transport at each depletion step. It uses OpenMC's C API in-memory to read tallied reaction rates and update material number densities, avoiding filesystem I/O between steps. This is the standard choice for coupled neutronics-depletion.
+
+- **`IndependentOperator`** — Accepts pre-computed multigroup fluxes and microscopic cross sections (`MicroXS` objects). No transport solve occurs during depletion. Useful for parametric burnup studies or decay-only calculations (pass an empty `MicroXS`).
 
 ```python
-from ctypes import CDLL
-_dll = CDLL(str(_filename))   # _filename resolved from package resources
+import openmc
+import openmc.deplete
+
+model = openmc.Model(geometry, materials, settings)
+operator = openmc.deplete.CoupledOperator(model, chain_file="chain.xml")
+
+# Or transport-independent:
+operator = openmc.deplete.IndependentOperator(
+    materials, fluxes, micros, chain_file="chain.xml"
+)
 ```
 
-Each submodule (`cell.py`, `material.py`, `tally.py`, etc.) then registers argument types, return types, and an error-check callback for every C function it uses:
+### Depletion Chain
+
+The `Chain` class reads an XML file describing the nuclear transmutation network: decay modes, reaction types (capture, fission, etc.), fission product yields, and decay constants. At runtime the chain is reduced to only the nuclides present in the model, which keeps the Bateman matrix sparse and tractable.
+
+The chain file path is set globally via `openmc.config['chain_file']` or passed explicitly to the operator.
+
+### Time Integration
+
+An integrator object drives the outer time loop. Each step it calls the operator for reaction rates, then delegates to the CRAM solver. Available integrators in `openmc.deplete.integrators`:
+
+| Class | Order | Notes |
+|---|---|---|
+| `PredictorIntegrator` | 1st | Simplest, fastest |
+| `CECMIntegrator` | 2nd | CE/CM predictor-corrector, common default |
+| `CELIIntegrator` | 2nd | CE/LI CFQ4 corrector |
+| `LEQIIntegrator` | 2nd | LE/QI with quadratic interpolation |
+| `CF4Integrator` | 4th | Commutator-free Lie algorithm |
+| `EPCRK4Integrator` | 4th | Extended predictor-corrector RK4 |
+| `SICELIIntegrator` | 2nd | Stochastic implicit CE/LI |
+| `SILEQIIntegrator` | 2nd | Stochastic implicit LE/QI |
+
+SI (Stochastic Implicit) variants iterate the corrector step multiple times to reduce Monte Carlo noise bias, at the cost of additional transport solves.
 
 ```python
-_dll.openmc_cell_get_id.argtypes = [c_int32, POINTER(c_int32)]
-_dll.openmc_cell_get_id.restype  = c_int
-_dll.openmc_cell_get_id.errcheck = _error_handler
+# Deplete over 3 cycles of 30 days at 1 GW
+integrator = openmc.deplete.CECMIntegrator(
+    operator,
+    timesteps=[30, 30, 30],
+    power=1e9,
+    timestep_units="d"
+)
+integrator.integrate()
 ```
 
-### Error Handling
+Timesteps can be specified in seconds (`"s"`), minutes (`"min"`), hours (`"h"`), days (`"d"`), years (`"a"`), or burnup (`"MWd/kg"`).
 
-The `_error_handler` function in `openmc/lib/error.py` is registered as the `errcheck` callback on every C call. It reads the global `openmc_err_msg` character buffer from the shared library and maps the integer error code to a Python exception:
+### CRAM Solver
 
-| C Error Constant | Python Exception |
-|---|---|
-| `OPENMC_E_ALLOCATE` | `AllocationError` |
-| `OPENMC_E_OUT_OF_BOUNDS` | `OutOfBoundsError` |
-| `OPENMC_E_INVALID_ARGUMENT` | `InvalidArgumentError` |
-| `OPENMC_E_INVALID_ID` | `InvalidIDError` |
-| `OPENMC_E_GEOMETRY` | `GeometryError` |
-| `OPENMC_E_WARNING` | Python `warning` (not raised) |
+The Chebyshev Rational Approximation Method (CRAM) solves `n(t) = exp(A·t) n₀` for each material independently. The sparse matrix `A` encodes all transmutation and decay paths from the depletion chain. Two accuracy levels are provided:
 
-### Proxy Objects and Mappings
+- **`CRAM16`** / **`Cram16Solver`** — 16th-order approximation
+- **`CRAM48`** / **`Cram48Solver`** — 48th-order, higher accuracy for stiff systems
 
-Each domain concept — Cell, Material, Tally, Filter, Nuclide — is wrapped in a Python proxy class that stores only a C-side array index (`_index`). The class's properties call through to C functions on every access, so they always reflect the live simulation state.
+`IPFCramSolver` implements incomplete partial factorization (IPF), reusing LU decompositions across substeps for improved accuracy at modest extra cost.
+
+Materials are depleted in parallel using Python's multiprocessing pool (`openmc/deplete/pool.py`), with MPI-aware distribution of materials across ranks.
+
+### Atom Number Tracking
+
+`AtomNumber` is an internal 2D array indexed by `(material_id, nuclide_name)` that stores total atom counts per material. It provides string or integer indexing and converts between atom counts and atom densities using stored material volumes.
+
+### Results & Post-Processing
+
+After each depletion step, a `StepResult` is appended and the full list is serialized to `depletion_results.h5`. The `Results` class (a list subclass) loads this file and provides high-level accessors:
 
 ```python
-class Cell(_FortranObjectWithID):
-    @property
-    def id(self):
-        cell_id = c_int32()
-        _dll.openmc_cell_get_id(self._index, cell_id)
-        return cell_id.value
+results = openmc.deplete.Results("depletion_results.h5")
 
-    def set_temperature(self, T, instance=None, set_contained=False):
-        _dll.openmc_cell_set_temperature(self._index, T, instance, set_contained)
+# Atom count of Xe135 in material "1" over time
+times, atoms = results.get_atoms("1", "Xe135", time_units="d")
+
+# Volumetric activity over time
+times, activity = results.get_activity("1", units="Bq/cm3")
+
+# Reconstruct the material composition at a given step
+mat = results[-1].get_material("1")
 ```
 
-`WeakValueDictionary` caches proxy instances by index to avoid creating duplicate Python objects for the same C object. Module-level mapping objects (`openmc.lib.cells`, `openmc.lib.materials`, `openmc.lib.tallies`) implement the `Mapping` ABC and delegate `__len__` and `__getitem__` to C functions:
+### Transfer Rates (Reprocessing)
+
+`TransferRates` and `ExternalSourceRates` (in `transfer_rates.py`) extend the depletion equations with additional source/sink terms, enabling online fuel reprocessing or feed simulations — for example modeling continuous extraction of fission products or feed of fresh fuel in a molten-salt reactor. These are added to the operator before integration:
 
 ```python
-# Access cells by user-assigned ID
-cell = openmc.lib.cells[42]
-cell.set_temperature(900.0)
-
-mat = openmc.lib.materials[1]
-mat.set_density(10.5, 'g/cm3')
+transfer = openmc.deplete.TransferRates(operator, model)
+transfer.set_transfer_rate("mat_fuel", ["Xe135", "Kr85"], 1e-5, "1/s")
 ```
-
-### Simulation Lifecycle
-
-The key lifecycle functions in `openmc/lib/core.py` correspond directly to C API entry points:
-
-```python
-openmc.lib.init(args=['--geometry-debug'])   # openmc_init()
-openmc.lib.simulation_init()                 # openmc_simulation_init()
-for _ in openmc.lib.iter_batches():
-    k, sigma = openmc.lib.keff()             # openmc_get_keff()
-    # inspect / mutate between batches
-openmc.lib.simulation_finalize()             # openmc_simulation_finalize()
-openmc.lib.finalize()                        # openmc_finalize()
-```
-
-The `run_in_memory()` context manager wraps init/finalize automatically:
-
-```python
-with openmc.lib.run_in_memory():
-    for _ in openmc.lib.iter_batches():
-        # modify tallies, temperatures, densities mid-run
-        pass
-```
-
-`TemporarySession` is a higher-level helper that exports model XML to a temporary directory, runs `init`, and cleans up on exit — useful for calling `openmc.lib` functions without polluting the working directory.
-
-### Input Validation with `openmc.checkvalue`
-
-The Python API layer (not `openmc.lib`) uses `openmc/checkvalue.py` for extensive input validation in property setters. Functions like `check_type`, `check_value`, `check_greater_than`, and `check_length` raise `TypeError` or `ValueError` with descriptive messages before any C call is made:
-
-```python
-import openmc.checkvalue as cv
-
-@temperature.setter
-def temperature(self, temp):
-    cv.check_type('temperature', temp, Real)
-    cv.check_greater_than('temperature', temp, 0.0)
-    self._temperature = temp
-```
-
-### ID Management with `IDManagerMixin`
-
-All Python-side geometry objects (Cell, Surface, Material, Universe, etc.) inherit from `IDManagerMixin` in `openmc/mixin.py`. It auto-assigns unique integer IDs and tracks them via class-level `used_ids` sets and a `next_id` counter. Duplicate IDs emit an `IDWarning`; `reset_auto_ids()` clears all counters between model builds:
-
-```python
-openmc.reset_auto_ids()   # clear all used_ids before building a new model
-cell = openmc.Cell()      # gets next available ID automatically
-```
-
-### Key C API Patterns
-
-The C API in `capi.h` uses consistent patterns throughout:
-
-- **Index-based access**: Objects are addressed by a 0-based array index (`int32_t index`), not by user ID. Python code calls `openmc_get_cell_index(id, &index)` first.
-- **Extend functions**: New objects are allocated with `openmc_extend_cells(n, &start, &end)`, which returns the index range of the new objects.
-- **Output via pointer parameters**: Return values are written through pointer arguments; the function return value is always an error code.
-- **String encoding**: C strings are `const char*`; Python code encodes with `.encode()` before passing and decodes with `.decode()` after receiving.
 
 ## Random Ray Solver
 
@@ -1118,234 +948,440 @@ The C API in `capi.h` uses consistent patterns throughout:
 <summary>Relevant Files</summary>
 
 <ul>
-<li><code>src/random_ray/random_ray_simulation.cpp</code></li>
 <li><code>src/random_ray/random_ray.cpp</code></li>
+<li><code>src/random_ray/random_ray_simulation.cpp</code></li>
 <li><code>src/random_ray/flat_source_domain.cpp</code></li>
 <li><code>src/random_ray/linear_source_domain.cpp</code></li>
+<li><code>src/random_ray/source_region.cpp</code></li>
 <li><code>include/openmc/random_ray/random_ray.h</code></li>
-<li><code>include/openmc/random_ray/random_ray_simulation.h</code></li>
 <li><code>include/openmc/random_ray/flat_source_domain.h</code></li>
-<li><code>include/openmc/random_ray/source_region.h</code></li>
 </ul>
 
 </details>
 
-The Random Ray solver is an alternative to the standard Monte Carlo particle transport method. Instead of tracking individual source particles, it propagates "rays" — deterministic-like transport sweeps — through the geometry and accumulates scalar flux estimates in **Flat Source Regions (FSRs)**. Each ray carries an angular flux that is attenuated as it crosses material regions, contributing to a multigroup flux estimate per iteration. This approach trades stochastic noise for a power-iteration convergence pattern, making it useful for eigenvalue and fixed-source multigroup problems.
+The Random Ray solver is an alternative to traditional Monte Carlo particle transport. It is a **hybrid deterministic-stochastic** method that uses stochastic ray tracing to solve the multigroup linear transport equation via power iteration. Instead of tracking probabilistic particle histories, it sweeps rays through the geometry and accumulates flux contributions to spatially-discretized **Flat Source Regions (FSRs)** — making it faster than Monte Carlo for many reactor physics problems at the cost of introducing geometric discretization error.
 
 ### Architecture Overview
 
 ```mermaid
 flowchart TD
     sim["RandomRaySimulation"]
-    domain["FlatSourceDomain"]
-    lindomain["LinearSourceDomain"]
+    domain["FlatSourceDomain / LinearSourceDomain"]
+    src_regions["SourceRegionContainer (SoA)"]
     ray["RandomRay (extends Particle)"]
-    src["SourceRegionContainer (SoA)"]
-    srh["SourceRegionHandle"]
+    geom["OpenMC Geometry Engine"]
+    tally["OpenMC Tally System"]
 
     sim -->|"owns"| domain
-    lindomain -->|"extends"| domain
-    domain -->|"holds"| src
-    ray -->|"reads/writes via"| srh
-    srh -->|"wraps"| src
+    domain -->|"manages"| src_regions
     sim -->|"spawns (OpenMP)"| ray
+    ray -->|"traces through"| geom
+    ray -->|"accumulates flux into"| src_regions
+    domain -->|"scores post-iteration"| tally
 ```
 
-The top-level **`RandomRaySimulation`** class owns a `FlatSourceDomain` (or its `LinearSourceDomain` subclass) and drives the power iteration loop. Each iteration spawns many `RandomRay` objects in parallel (via OpenMP), which transport rays through the geometry using the CSG engine inherited from the `Particle` class.
+The main classes and their responsibilities are:
 
-### Source Region Domain
+- **`RandomRaySimulation`** — top-level orchestrator; runs the power iteration loop and coordinates all phases per batch
+- **`FlatSourceDomain`** — manages FSRs, stores cross-section and flux data, computes sources, normalizes volumes, and scores tallies
+- **`LinearSourceDomain`** — extends `FlatSourceDomain` with linear flux moment tracking for higher-order source representation
+- **`RandomRay`** — extends `Particle` to trace a single ray through geometry, attenuating angular flux segment by segment
 
-`FlatSourceDomain` manages all per-region data for a simulation:
+### Power Iteration Loop
 
-- **Source region discovery**: FSRs are discovered lazily during transport and stored in a thread-safe `ParallelMap`. After each iteration, `finalize_discovered_source_regions()` merges these into the main `SourceRegionContainer`.
-- **SoA layout**: `SourceRegionContainer` stores all per-region fields (scalar flux, volume, material, centroid, tally tasks) in separate `vector` arrays for cache efficiency.
-- **Mesh subdivision**: A source region can be subdivided by an overlaid mesh (e.g., for FW-CADIS weight windows). Each `SourceRegionKey` combines a base FSR index with a mesh bin index.
-- **Cross section flattening**: MGXS data is extracted into compact flat arrays (`sigma_t_`, `sigma_s_`, `nu_sigma_f_`, etc.) at initialization for fast lookup during transport.
+Each simulation batch follows this sequence inside `RandomRaySimulation::simulate()`:
 
-`LinearSourceDomain` extends `FlatSourceDomain` to support a spatially linear source approximation within each region. It additionally tracks flux moments and a moment matrix (spatial second moments) per region, enabling higher-order flux reconstruction.
+1. **Source update** — Compute fission and scattering sources from the previous iteration's scalar flux (`update_all_neutron_sources`).
+2. **Batch reset** — Zero out per-iteration accumulators: `scalar_flux_new`, flux moments, and volumes.
+3. **Ray transport** (OpenMP parallel) — Each ray is initialized, traced, and accumulates delta flux contributions to FSRs.
+4. **Finalize discovered regions** — Dynamically discovered FSRs (e.g., mesh subdivisions) are merged.
+5. **Normalize flux and volumes** — Divide accumulated flux by estimated FSR volumes.
+6. **Eigenvalue update** — Recompute k-eff from fission rate ratio.
+7. **Tally scoring** (active batches only) — FSR fluxes are scored to OpenMC tallies.
+8. **Flux swap** — `phi_old ← phi_new` to prepare for the next iteration.
 
-### Per-Ray Transport Loop
+### Ray Transport and Flux Attenuation
 
-Each `RandomRay` follows a two-phase path:
+Each `RandomRay` samples a starting position and isotropic direction from the configured ray source, then advances through the geometry using OpenMC's `Particle` geometry-tracking machinery. For each segment of length `d` through a homogeneous FSR, the flux is attenuated using the Method of Characteristics (MOC) formula:
 
-1. **Inactive (dead zone)**: The ray travels `distance_inactive_` before contributing to flux accumulation, ensuring the ray has equilibrated angularly.
-2. **Active phase**: The ray travels `distance_active_`, contributing flux changes (`delta_psi`) and path lengths to each FSR it crosses.
-
-The core flux attenuation in the flat-source case per energy group `g` is:
-
+```cpp
+// Flat source attenuation (per energy group g)
+double tau = sigma_t * distance;
+double exponential = 1.0 - std::exp(-tau);  // fast Remez approximation used
+double delta_psi = (psi_incoming - source[g]) * exponential;
+psi_outgoing = psi_incoming - delta_psi;
+// Accumulate to scalar_flux_new[g] if in active phase
 ```
-tau = sigma_t * distance
-exponential = 1 - exp(-tau)        // using cjosey_exponential() rational approx
-delta_psi[g] = (psi[g] - source[g]) * exponential
-psi[g] -= delta_psi[g]
-```
 
-The `cjosey_exponential` and `exponentialG` functions are custom rational approximations (7th-order Padé) used in place of `std::exp` for speed. Each FSR uses a per-region `OpenMPMutex` lock so that concurrent rays updating the same region are serialized safely.
+For the **Linear Source** mode (`LinearSourceDomain`), source gradients within each FSR are tracked and used to compute spatially-varying source corrections along the ray, improving accuracy in coarsely discretized geometries at the cost of storing flux moment matrices per region.
 
-For the linear-source mode, the spatial gradient of the source is also evaluated, incorporating the distance from the ray midpoint to the FSR centroid, using additional exponential integral functions (`exponentialG`, `exponentialG2`).
+### Source Region Storage
 
-### Iteration Loop
+FSR data is stored in a **Structure-of-Arrays (SoA)** layout inside `SourceRegionContainer` for cache efficiency and OpenMP vectorization. Each region tracks:
 
-The `simulate()` method in `RandomRaySimulation` executes the following each batch:
+- `scalar_flux_old` / `scalar_flux_new` — flux from the previous and current iteration
+- `source_` — flat source (scattering + fission + optional external)
+- `volume_` and `volume_t_` — current and time-averaged volume estimate
+- `centroid_` and `mom_matrix_` — spatial moment data (linear mode only)
+- `material_`, `temp_idx_` — for cross-section lookup
 
-1. **Source update** — `update_all_neutron_sources()` recomputes fission + scattering sources from the previous iteration's flux.
-2. **Batch reset** — zeroes iteration volumes and `scalar_flux_new` for all FSRs.
-3. **Transport sweep** — parallel OpenMP loop over `n_particles` rays; each calls `transport_history_based_single_ray()`.
-4. **Finalize discovered regions** — merges newly found FSRs into the main container.
-5. **Normalization** — divides accumulated flux contributions by estimated volumes and total active ray length.
-6. **Stabilization** — `apply_transport_stabilization()` corrects for potential instability from negative in-group scattering cross sections in transport-corrected MGXS data.
-7. **k-eff update** (eigenvalue mode) — `compute_k_eff()` estimates the eigenvalue from the fission rate ratio.
-8. **Tally accumulation** (active batches only) — `random_ray_tally()` scores FSR fluxes to native OpenMC tallies.
-9. **Flux swap** — `scalar_flux_old = scalar_flux_new` for the next iteration.
+Thread-safe accumulation during ray transport uses a per-region OpenMP lock so concurrent rays can safely update the same FSR.
 
-### Sampling Methods
+### Configuration Options
 
-Ray starting positions and directions can be generated using three strategies (controlled by `RandomRay::sample_method_`):
+| Option | Values | Description |
+|--------|--------|-------------|
+| Source shape | `FLAT`, `LINEAR`, `LINEAR_XY` | Flux representation within FSRs |
+| Ray sampling | `PRNG`, `HALTON`, `S2` | Random or low-discrepancy sampling |
+| Volume estimator | `NAIVE`, `SIMULATION_AVERAGED`, `HYBRID` | How FSR volumes are estimated |
+| Inactive distance | float | "Dead zone" before rays start scoring |
+| Active distance | float | Length over which rays contribute |
 
-- **PRNG** — standard pseudorandom number generator (default)
-- **Halton** — quasi-random low-discrepancy sequence for faster convergence
-- **S2** — stratified spherical sampling for the angular direction
+The `HYBRID` volume estimator (default) uses simulation-averaged volumes for stability in most regions, but falls back to per-iteration naive volumes when external sources are present to avoid biasing the source.
 
-The ray spatial source must be an `IndependentSource` with a box (`SpatialBox`) distribution covering the entire geometry.
+### Special Features
 
-### Supported Modes and Limitations
+**Adjoint simulation:** A forward flux solve is followed by a reverse solve using transposed scattering matrices and importance-weighted sources. This enables FW-CADIS variance reduction for Monte Carlo simulations.
 
-| Feature | Supported |
-|---|---|
-| Eigenvalue (k-eff) | ✅ |
-| Fixed source | ✅ |
-| Adjoint / FW-CADIS | ✅ |
-| Flat source approximation | ✅ |
-| Linear source approximation | ✅ |
-| OpenMP parallelism | ✅ |
-| MPI parallelism | ❌ (rank 0 only) |
-| Continuous-energy XS | ❌ (multigroup only) |
+**Transport stabilization:** For multigroup cross-sections with negative diagonal in-group scattering (common in transport-corrected data), an optional stabilization factor `rho` prevents unphysical flux oscillations.
 
-Supported tally scores are limited to: `flux`, `total`, `fission`, `nu-fission`, `kappa-fission`, and `events`. Supported filters include: `cell`, `cell_instance`, `distribcell`, `energy`, `material`, `mesh`, `universe`, and `particle`.
+**Exponential approximations:** The inner transport loop avoids repeated `std::exp()` calls using rational Remez polynomial approximations (`cjosey_exponential`, `exponentialG`, `exponentialG2`), achieving ~2×10⁻⁷ relative error while significantly improving performance.
 
-An instability check (`instability_check()`) runs each iteration, warning if the FSR miss rate exceeds 1% and raising a fatal error for non-physical k-eff values. Users can resolve high miss rates by increasing `n_particles` or the active ray distance.
+**Mesh subdivision:** An overlay mesh can further subdivide FSRs for finer spatial resolution without modifying the CSG geometry, with subdivided regions discovered dynamically during transport.
 
-## Variance Reduction & Weight Windows
+## Python API & Model Building
 
 <details>
 <summary>Relevant Files</summary>
 
 <ul>
-<li><code>openmc/weight_windows.py</code></li>
-<li><code>src/weight_windows.cpp</code></li>
-<li><code>include/openmc/weight_windows.h</code></li>
+<li><code>openmc/model/model.py</code></li>
+<li><code>openmc/material.py</code></li>
+<li><code>openmc/source.py</code></li>
+<li><code>openmc/mesh.py</code></li>
+<li><code>openmc/mixin.py</code></li>
+<li><code>openmc/checkvalue.py</code></li>
+<li><code>openmc/examples.py</code></li>
+<li><code>openmc/lib/core.py</code></li>
+<li><code>openmc/lib/material.py</code></li>
+<li><code>openmc/lib/cell.py</code></li>
 </ul>
 
 </details>
 
-Weight windows are OpenMC's primary variance reduction technique, steering particle populations by **splitting** heavy particles and applying **Russian roulette** to light ones. The implementation spans a Python API for model setup and a C++ transport core for per-particle decisions.
+The OpenMC Python API provides a high-level interface for building nuclear transport models, running simulations, and post-processing results. All user-facing functionality lives in the `openmc/` package, while the `openmc/lib/` subpackage provides low-level ctypes bindings to the compiled C++ library.
 
-### Core Concepts
+```mermaid
+flowchart TD
+    user["User Python Code"]
+    model["openmc.Model"]
+    geo["Geometry / Cells / Surfaces"]
+    mat["Materials"]
+    src["Settings / Sources"]
+    xml["XML Input Files"]
+    capi["openmc.lib (C API)"]
+    hdf5["Statepoint HDF5"]
 
-Every spatial/energy cell in the mesh carries a lower and upper weight bound. When a particle's weight falls outside those bounds:
+    user --> model
+    model --> geo
+    model --> mat
+    model --> src
+    model -->|"export_to_xml()"| xml
+    model -->|"run()"| capi
+    capi --> hdf5
+```
 
-- **Weight too high** (above upper bound): the particle is split into `n` copies, each with weight reduced proportionally (capped by `max_split`).
-- **Weight too low** (below lower bound): Russian roulette is played. The particle survives to a `survival_weight` with the appropriate probability, or is killed.
-- **Weight below cutoff**: the particle is immediately killed.
+### The `Model` Class
 
-### Python API
-
-The `WeightWindows` class (in `openmc/weight_windows.py`) is the user-facing object:
+`openmc.Model` is the central container for a complete simulation. It holds geometry, materials, settings, tallies, and plots as a single unit and coordinates export and execution.
 
 ```python
 import openmc
 
-mesh = openmc.RegularMesh()
-mesh.lower_left = [-10, -10, -10]
-mesh.upper_right = [10, 10, 10]
-mesh.dimension = [20, 20, 20]
+model = openmc.Model()
+model.geometry  = my_geometry
+model.materials = my_materials
+model.settings  = my_settings
+model.tallies   = my_tallies
 
-ww = openmc.WeightWindows(
-    mesh=mesh,
-    lower_ww_bounds=lower,   # ndarray shaped (nx, ny, nz, n_energy)
-    upper_ww_bounds=upper,
-    particle_type='neutron',
-    energy_bounds=[1e-3, 1.0, 20.0e6],  # eV
-    survival_ratio=3.0,
-    max_split=10,
-)
+# Export all input files at once
+model.export_to_xml()
+
+# Run via subprocess (CLI)
+statepoint_path = model.run()
+
+# Or run in-process via C API (faster, allows batch-level control)
+model.init_lib()
+model.run()
+model.finalize_lib()
 ```
 
-Key parameters:
+Key `Model` methods:
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `survival_ratio` | 3.0 | Survival weight = lower bound × ratio |
-| `max_split` | 10 | Maximum particles from a single split |
-| `weight_cutoff` | 1e-38 | Kill weight threshold |
-| `max_lower_bound_ratio` | — | Allows heavier particles before forced split |
+- `export_to_xml(directory)` — writes `geometry.xml`, `materials.xml`, `settings.xml`, etc.
+- `export_to_model_xml(path)` — writes everything into a single consolidated XML file.
+- `from_xml()` / `from_model_xml(path)` — reconstruct a `Model` from saved XML files.
+- `deplete(...)` — orchestrates burnup calculations using `openmc.deplete`.
+- `calculate_volumes(...)` — runs a stochastic volume calculation.
 
-### Automatic Weight Window Generation
+### Defining Materials
 
-`WeightWindowGenerator` automates bound creation during simulation by attaching an internal tally. Two methods are supported:
-
-- **MAGIC** (`method='magic'`): Forward flux-based. Bounds are proportional to the local flux, normalised per energy group.
-- **FW-CADIS** (`method='fw_cadis'`): Adjoint-flux-based (requires random ray mode). Bounds are inversely proportional to adjoint flux, globally normalised for optimal source-detector problems.
+`openmc.Material` represents a physical composition. It inherits from `IDManagerMixin`, so IDs are auto-assigned unless specified explicitly.
 
 ```python
-wwg = openmc.WeightWindowGenerator(
-    mesh=mesh,
-    energy_bounds=[1e-3, 20.0e6],
-    particle_type='neutron',
-    method='magic',
-    update_interval=5,         # update every 5 batches
-    update_parameters={
-        'value': 'mean',
-        'threshold': 0.8,      # max rel. error before masking
-        'ratio': 5.0,          # upper/lower ratio
-    },
-)
-model.settings.weight_window_generators = [wwg]
+uo2 = openmc.Material(name='UO2 Fuel')
+uo2.add_nuclide('U235', 0.03, 'ao')   # 3 atom% U-235
+uo2.add_nuclide('U238', 0.97, 'ao')
+uo2.add_nuclide('O16',  2.00, 'ao')
+uo2.set_density('g/cm3', 10.29769)
+uo2.add_s_alpha_beta('c_O_in_UO2')    # thermal scattering
+
+water = openmc.Material(name='H2O')
+water.add_element('H', 2.0, 'ao')
+water.add_element('O', 1.0, 'ao')
+water.set_density('g/cm3', 0.7)
 ```
 
-### Data Flow
+Supported density units include `'g/cm3'`, `'kg/m3'`, `'atom/b-cm'`, `'atom/cm3'`, and `'sum'` (auto-calculated). The `depletable=True` flag marks a material for tracking in burnup calculations.
+
+### ID Management with `IDManagerMixin`
+
+All geometry objects (`Cell`, `Surface`, `Material`, `Universe`, `Tally`) use `IDManagerMixin` defined in `openmc/mixin.py`. This mixin auto-assigns sequential integer IDs and tracks all used IDs at the class level.
+
+```python
+m1 = openmc.Material()   # auto ID = 1
+m2 = openmc.Material()   # auto ID = 2
+m3 = openmc.Material(id=10)  # explicit ID 10
+
+# Reset counters between test cases
+openmc.reset_auto_ids()
+```
+
+If a duplicate ID is provided, an `IDWarning` is issued (not an exception), so existing workflows are not broken.
+
+### Input Validation with `checkvalue`
+
+Every property setter in the Python API calls functions from `openmc/checkvalue.py` before storing a value. This provides uniform, descriptive error messages across the entire codebase.
+
+```python
+import openmc.checkvalue as cv
+
+# Type check
+cv.check_type('temperature', temp, float)
+
+# Bounds check
+cv.check_greater_than('density', density, 0.0, equality=False)
+
+# Whitelist check
+cv.check_value('percent_type', ptype, {'ao', 'wo'})
+
+# Length check
+cv.check_length('xyz', position, 3, 3)
+```
+
+### Defining Particle Sources
+
+`openmc.IndependentSource` (and its siblings `FileSource`, `CompiledSource`, `MeshSource`) define where and how source particles are sampled. Sources use distributions from `openmc.stats` for spatial, angular, and energy sampling.
+
+```python
+source = openmc.IndependentSource()
+source.space  = openmc.stats.Box([-10, -10, -10], [10, 10, 10])
+source.angle  = openmc.stats.Isotropic()
+source.energy = openmc.stats.Discrete([2.0e6], [1.0])  # 2 MeV mono-energetic
+source.particle = 'neutron'
+
+settings = openmc.Settings()
+settings.source = [source]
+settings.batches = 50
+settings.particles = 10_000
+```
+
+Constraints (e.g., `fissionable=True`, `domains=[cell]`) can further restrict where source particles are accepted.
+
+### C API Bindings (`openmc.lib`)
+
+The `openmc/lib/` subpackage wraps the compiled C++ library via Python's `ctypes`. This enables in-process control of the simulation — running individual batches, reading/modifying material properties at runtime, or coupling to external depletion codes.
+
+```python
+import openmc.lib
+
+openmc.lib.init()                  # initialize the C library
+openmc.lib.simulation_init()       # prepare particle banks
+
+for _ in range(settings.batches):
+    openmc.lib.next_batch()        # run one batch
+
+openmc.lib.simulation_finalize()
+k, unc = openmc.lib.keff()
+openmc.lib.finalize()
+```
+
+Runtime objects in `openmc.lib` mirror their Python counterparts:
+
+- `openmc.lib.materials[id]` — a live `Material` object backed by C++ memory.
+- `openmc.lib.cells[id]` — a live `Cell` with per-instance temperature/density control.
+- Properties set on these objects take effect immediately in the running simulation.
+
+### Pre-built Example Models
+
+`openmc/examples.py` provides ready-to-run `Model` instances useful for testing and learning:
+
+- `openmc.examples.pwr_pin_cell()` — single fuel pin in borated water.
+- `openmc.examples.pwr_assembly()` — 17×17 PWR fuel assembly lattice.
+- `openmc.examples.pwr_core()` — full 241-assembly core benchmark.
+- `openmc.examples.slab_mg()` — 1-D multi-group slab.
+- `openmc.examples.jezebel()` — bare Pu-239 sphere critical assembly.
+
+```python
+model = openmc.examples.pwr_pin_cell()
+model.settings.particles = 5000
+sp_path = model.run()
+```
+
+All examples use low particle counts by default so they run quickly in tests. They are the recommended starting point for regression test fixtures.
+
+## Testing Infrastructure
+
+<details>
+<summary>Relevant Files</summary>
+
+<ul>
+<li><code>tests/testing_harness.py</code></li>
+<li><code>tests/conftest.py</code></li>
+<li><code>tests/unit_tests/conftest.py</code></li>
+<li><code>tests/regression_tests/__init__.py</code></li>
+<li><code>tests/unit_tests/</code></li>
+<li><code>tests/regression_tests/</code></li>
+<li><code>pytest.ini</code></li>
+<li><code>tools/ci/download-xs.sh</code></li>
+</ul>
+
+</details>
+
+OpenMC's test suite is divided into two complementary layers: fast Python **unit tests** that validate the API in isolation, and full-simulation **regression tests** that compare outputs against known-good reference data. Both layers use pytest and share configuration infrastructure through a unified `conftest.py`.
+
+### Test Layout
+
+```
+tests/
+├── conftest.py              # Top-level pytest config, env checks, shared fixtures
+├── testing_harness.py       # Regression test harness base classes
+├── unit_tests/              # ~100 fast Python API tests
+│   ├── conftest.py          # Shared fixtures: uo2, water, sphere_model, …
+│   └── test_*.py
+└── regression_tests/        # ~160 full-simulation scenarios
+    ├── __init__.py          # Global config dict & depletion helpers
+    └── <scenario>/
+        ├── test.py
+        ├── inputs_true.dat  # Hash of expected XML inputs
+        └── results_true.dat # Expected k-eff / tally values
+```
+
+`pytest.ini` applies minimal global options: only files named `test*.py` are collected, class-based discovery is disabled, and `UserWarning` is silenced by default.
+
+### Unit Tests
+
+Unit tests live in `tests/unit_tests/` and are designed to run quickly without a full OpenMC simulation. They cover:
+
+- **API validation** — object construction, property setters/getters, and XML round-trips (e.g., `test_material.py`, `test_cell.py`, `test_source.py`)
+- **Data processing** — nuclear data parsing, depletion chain math, MGXS conversions
+- **`openmc.lib` bindings** — ctypes interface exercised by calling `model.init_lib()` inside a try/finally block
+
+Common shared fixtures defined in `tests/unit_tests/conftest.py`:
+
+| Fixture | Scope | Description |
+|---|---|---|
+| `uo2` | module | UO2 material with U235 + O16 |
+| `water` | module | Light water with S(α,β) binding |
+| `sphere_model` | module | Minimal single-sphere fixed-source model |
+| `cell_with_lattice` | function | 2×2 rectangular lattice geometry |
+| `mixed_lattice_model` | function | Hex-in-rect lattice with periodic BCs |
+
+The top-level `conftest.py` also provides:
+- `run_in_tmpdir` — changes to a temporary directory for tests that create files
+- `endf_data` — resolves `OPENMC_ENDF_DATA` from the environment
+- `resolve_paths` — session-wide patch disabling path resolution (avoids cross-section lookups during unit tests)
+
+### Regression Tests
+
+Each scenario under `tests/regression_tests/<name>/` contains a `test.py` that builds an OpenMC model, runs the simulation, and verifies outputs. The `testing_harness.py` module provides the base classes that implement this workflow.
 
 ```mermaid
 flowchart TD
-    A["Python WeightWindows / WeightWindowGenerator"] -->|"XML serialization"| B["settings.xml"]
-    B -->|"pugi::xml parse"| C["C++ WeightWindows class"]
-    C -->|"stored in variance_reduction::weight_windows"| D["Global WW store"]
-    D --> E["apply_weight_windows(Particle&)"]
-    E -->|"get_bin + energy search"| F["WeightWindow struct"]
-    F -->|"wgt > upper"| G["Split particle"]
-    F -->|"wgt < lower"| H["Russian roulette"]
-    I["Internal tally (flux)"] -->|"update_weights()"| C
+    A["test.py calls harness.main()"] --> B{"--update flag?"}
+    B -->|"No (normal run)"| C["_build_inputs()"]
+    B -->|"Yes (update refs)"| D["_build_inputs()"]
+    C --> E["_compare_inputs()"]
+    E --> F["_run_openmc()"]
+    F --> G["_get_results()"]
+    G --> H["_compare_results()"]
+    H --> I["_cleanup()"]
+    D --> J["_overwrite_inputs()"]
+    J --> K["_run_openmc()"]
+    K --> L["_overwrite_results()"]
+    L --> I
 ```
 
-### C++ Weight Application
+**Available harness classes** in `tests/testing_harness.py`:
 
-`apply_weight_window()` in `src/weight_windows.cpp` is the performance-critical path:
+| Class | Purpose |
+|---|---|
+| `TestHarness` | Base class; reads XML inputs, runs OpenMC, diffs `results_true.dat` |
+| `HashedTestHarness` | SHA-512 hashes the results before comparing (compact reference files) |
+| `PyAPITestHarness` | Builds model from Python API; also compares `inputs_true.dat` XML hash |
+| `HashedPyAPITestHarness` | PyAPI variant with hashed results (most common pattern) |
+| `TolerantPyAPITestHarness` | Relative-tolerance float comparison for random ray / single-precision tests |
+| `WeightWindowPyAPITestHarness` | Reads `weight_windows.h5` instead of a statepoint |
+| `PlotTestHarness` | Hashes PNG / voxel HDF5 plot outputs |
+| `ParticleRestartTestHarness` | Runs simulation twice (initial + restart) and checks particle state |
+| `CMFDTestHarness` | Verifies CMFD acceleration data (k, entropy, balance, dominance ratio) |
+| `CollisionTrackTestHarness` | Compares sorted `collision_track.h5` arrays with `np.testing.assert_allclose` |
 
-1. On first application, the birth weight window is recorded on the particle for subsequent normalisation across regions.
-2. If `max_lower_bound_ratio` is set and the particle weight exceeds `lower × ratio`, a per-particle scaling factor (`ww_factor`) is stored, deferring the split.
-3. Splitting creates secondary particles via `p.split()` and reduces the primary's weight.
-4. Russian roulette uses `russian_roulette(p, survival_weight)`.
-
-Checkpoints occur at **surface crossings** and **collisions**, controlled by `settings.weight_window_checkpoint_surface` and `settings.weight_window_checkpoint_collision`.
-
-### Legacy MCNP Import
-
-`WeightWindowsList.from_wwinp(path)` parses MCNP `wwinp` files, supporting rectilinear, cylindrical, and spherical meshes. Energy units are converted from MeV to eV automatically.
-
-### HDF5 Output
-
-After a run, weight windows can be exported and reused:
+A typical regression test looks like:
 
 ```python
-# Export from statepoint
-sp = openmc.StatePoint('statepoint.100.h5')
-wws = sp.weight_windows
+from openmc.examples import pwr_pin_cell
+from tests.testing_harness import HashedPyAPITestHarness
 
-# Or export standalone
-ww_list = openmc.WeightWindowsList([ww])
-ww_list.export_to_hdf5('weight_windows.h5')
+def test():
+    model = pwr_pin_cell()
+    model.settings.particles = 1000
+    harness = HashedPyAPITestHarness('statepoint.10.h5', model)
+    harness.main()
 ```
 
-The HDF5 group layout is `weight_windows_{id}` containing datasets for bounds, energy bins, mesh ID, and all tuning parameters.
+### pytest CLI Options
 
----
+The top-level `conftest.py` registers custom pytest command-line options consumed by the regression test harness:
+
+| Option | Effect |
+|---|---|
+| `--exe PATH` | Path to the `openmc` executable |
+| `--mpi` | Enable MPI execution with two processes |
+| `--mpiexec PATH` | Override the MPI launcher (default: `mpiexec`) |
+| `--update` | Regenerate `inputs_true.dat` / `results_true.dat` reference files |
+| `--build-inputs` | Only build XML inputs without running |
+| `--event` | Run simulation in event-based (rather than history-based) mode |
+
+### Environment Requirements
+
+Before running tests, the following conditions must be met:
+
+1. **Nuclear data**: Set `OPENMC_CROSS_SECTIONS` to the NNDC HDF5 `cross_sections.xml`. The `conftest.py` checks the MD5 hash against the official NNDC dataset and warns if it differs.
+2. **Strict FP build**: Rebuild with `-DOPENMC_ENABLE_STRICT_FP=on` so that floating-point optimizations don't cause results to diverge from the stored reference values.
+3. **Thread count**: Set `OMP_NUM_THREADS=2` to avoid race-condition failures in OpenMP-parallel tests.
+
+The CI download script `tools/ci/download-xs.sh` fetches both the NNDC HDF5 library (~800 MB) and the ENDF/B-VII.1 raw data, skipping downloads if the files already exist.
+
+```bash
+# Typical unit test run (no nuclear data needed for most)
+pytest tests/unit_tests/
+
+# Full regression suite
+export OPENMC_CROSS_SECTIONS=$HOME/nndc_hdf5/cross_sections.xml
+export OMP_NUM_THREADS=2
+pytest tests/regression_tests/
+
+# Regenerate reference files after a code change
+pytest tests/regression_tests/tallies/ --update
+```
